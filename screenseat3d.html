@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ScreenSeat 3D — Cinema Booking</title>
+<!-- Local zero-latency scripts -->
+<script src="three.min.js"></script>
+<script src="OrbitControls.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;background:#04040e;font-family:'Segoe UI',system-ui,sans-serif;color:#fff;}
+canvas{position:fixed;inset:0;width:100%!important;height:100%!important;z-index:0;}
+
+
+/* LUXURY THEATRE SELECTOR */
+.theatre-badge{
+  pointer-events:all;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background:rgba(18,22,38,.85);
+  border:1px solid rgba(0,229,255,.28);
+  border-radius:999px;
+  padding:6px 16px 6px 12px;
+  backdrop-filter:blur(18px);
+  cursor:pointer;
+  transition:all .3s cubic-bezier(.34,1.56,.64,1);
+  box-shadow:0 4px 20px rgba(0,0,0,.4),0 0 16px rgba(0,229,255,.08);
+}
+.theatre-badge:hover{
+  border-color:#f5c518;
+  box-shadow:0 6px 26px rgba(245,197,24,.22);
+  transform:translateY(-1px);
+}
+.tb-pulse{
+  width:9px;height:9px;border-radius:50%;background:#00e5ff;
+  box-shadow:0 0 8px #00e5ff;
+  animation:tPulse 1.8s infinite;
+}
+@keyframes tPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.4);opacity:.5}}
+.tb-city{
+  font-size:.72rem;
+  font-weight:800;
+  color:#00e5ff;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.tb-divider{width:1px;height:14px;background:rgba(255,255,255,.15);}
+.tb-name{
+  font-size:.82rem;
+  font-weight:700;
+  color:#fff;
+  max-width:230px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.tb-arrow{
+  font-size:.7rem;
+  color:#f5c518;
+  transition:transform .3s ease;
+}
+.theatre-badge.open .tb-arrow{transform:rotate(180deg);}
+
+/* THEATRE POPUP MODAL / DRAWER */
+#theatre-modal{
+  position:fixed;
+  inset:0;
+  z-index:650;
+  background:rgba(0,0,0,.75);
+  backdrop-filter:blur(14px);
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+#theatre-box{
+  background:linear-gradient(135deg,#0c101d,#141c2e);
+  border:1px solid rgba(0,229,255,.25);
+  border-radius:24px;
+  padding:28px;
+  width:92%;
+  max-width:680px;
+  max-height:85vh;
+  display:flex;
+  flex-direction:column;
+  animation:popIn .35s cubic-bezier(.34,1.56,.64,1);
+  box-shadow:0 30px 80px rgba(0,0,0,.8),0 0 40px rgba(0,229,255,.1);
+}
+.tm-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+.tm-title{font-size:1.35rem;font-weight:900;background:linear-gradient(135deg,#fff,#00e5ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.tm-close{background:rgba(255,255,255,.08);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;}
+.tm-close:hover{background:#dc2626;}
+.tm-search{
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:12px;
+  padding:11px 16px;
+  color:#fff;
+  font-size:.88rem;
+  outline:none;
+  margin-bottom:16px;
+  transition:all .25s;
+}
+.tm-search:focus{border-color:#00e5ff;box-shadow:0 0 0 3px rgba(0,229,255,.15);}
+.tm-list{
+  overflow-y:auto;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  padding-right:4px;
+}
+.tcard{
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;
+  padding:14px;
+  cursor:pointer;
+  transition:all .25s ease;
+  position:relative;
+}
+.tcard:hover{
+  background:rgba(0,229,255,.06);
+  border-color:#00e5ff;
+  transform:translateY(-2px);
+  box-shadow:0 8px 24px rgba(0,229,255,.15);
+}
+.tcard.sel{
+  background:linear-gradient(135deg,rgba(245,197,24,.12),rgba(255,107,53,.08));
+  border-color:#f5c518;
+  box-shadow:0 0 20px rgba(245,197,24,.25);
+}
+.tc-name{font-weight:800;font-size:.9rem;margin-bottom:4px;color:#fff;}
+.tcard.sel .tc-name{color:#f5c518;}
+.tc-area{font-size:.72rem;color:rgba(255,255,255,.45);margin-bottom:8px;display:flex;align-items:center;gap:4px;}
+.tc-screens{display:flex;gap:4px;flex-wrap:wrap;}
+.tc-badge{font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(255,255,255,.07);color:rgba(255,255,255,.7);}
+.tcard.sel .tc-badge{background:rgba(245,197,24,.18);color:#f5c518;}
+
+/* LOADER */
+#loader{position:fixed;inset:0;z-index:999;background:#04040e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .6s ease;}
+.loader-logo{font-size:2.6rem;font-weight:900;background:linear-gradient(135deg,#f5c518,#ff6b35,#ff44aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;letter-spacing:-1px;}
+.loader-bar{width:260px;height:5px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden;}
+.loader-fill{height:100%;background:linear-gradient(90deg,#f5c518,#ff6b35,#ff44aa);border-radius:99px;animation:loadFill 0.8s cubic-bezier(.4,0,.2,1) forwards;}
+@keyframes loadFill{from{width:0}to{width:100%}}
+.loader-txt{font-size:.8rem;color:rgba(255,255,255,.35);letter-spacing:.18em;text-transform:uppercase;}
+.loader-btn{margin-top:8px;padding:10px 24px;font-size:.82rem;background:linear-gradient(135deg,rgba(245,197,24,.15),rgba(255,107,53,.15));border:1px solid rgba(245,197,24,.35);border-radius:12px;color:#f5c518;cursor:pointer;font-weight:700;transition:all .25s;}
+.loader-btn:hover{background:rgba(245,197,24,.22);transform:translateY(-2px);}
+
+/* TOP NAV */
+#topnav{position:fixed;top:0;left:0;right:0;z-index:200;display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:linear-gradient(to bottom,rgba(0,0,0,.95),rgba(0,0,0,.0));pointer-events:none;}
+.logo{font-size:1.5rem;font-weight:900;background:linear-gradient(135deg,#f5c518,#ff6b35);-webkit-background-clip:text;-webkit-text-fill-color:transparent;pointer-events:all;cursor:pointer;}
+.nav-btns{display:flex;gap:8px;pointer-events:all;}
+.nbtn{padding:8px 18px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.6);color:rgba(255,255,255,.7);cursor:pointer;font-size:.78rem;font-weight:600;backdrop-filter:blur(14px);transition:all .25s;}
+.nbtn:hover,.nbtn.active{background:rgba(245,197,24,.18);border-color:#f5c518;color:#f5c518;}
+.nbtn:disabled{opacity:.3;cursor:default;}
+
+/* CAMERA VIEWS */
+#camviews{position:fixed;top:66px;right:16px;z-index:200;display:none;flex-direction:column;gap:6px;}
+.cam-label{font-size:.58rem;color:rgba(255,255,255,.3);text-align:center;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;}
+.cvbtn{padding:8px 14px;background:rgba(0,0,0,.78);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:rgba(255,255,255,.65);cursor:pointer;font-size:.74rem;font-weight:600;backdrop-filter:blur(14px);transition:all .25s;white-space:nowrap;text-align:center;}
+.cvbtn:hover,.cvbtn.active{background:rgba(0,229,255,.15);border-color:#00e5ff;color:#00e5ff;box-shadow:0 0 14px rgba(0,229,255,.2);}
+#seat-view-banner{display:none;position:fixed;top:66px;left:50%;transform:translateX(-50%);z-index:300;background:linear-gradient(135deg,rgba(245,197,24,.18),rgba(255,107,53,.18));border:1px solid rgba(245,197,24,.4);border-radius:16px;padding:12px 24px;backdrop-filter:blur(16px);text-align:center;animation:popIn .4s cubic-bezier(.34,1.56,.64,1);box-shadow:0 8px 32px rgba(0,0,0,.6);}
+#seat-view-banner .svb-title{font-size:.88rem;font-weight:900;color:#f5c518;margin-bottom:3px;}
+#seat-view-banner .svb-sub{font-size:.72rem;color:rgba(255,255,255,.6);}
+.svb-actions{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;}
+.svb-back{padding:7px 16px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:9px;color:#fff;font-size:.76rem;cursor:pointer;font-weight:700;transition:all .2s;}
+.svb-back:hover{background:rgba(255,255,255,.22);border-color:#fff;}
+.svb-cancel{padding:7px 16px;background:linear-gradient(135deg,#dc2626,#991b1b);border:1px solid rgba(239,68,68,.5);border-radius:9px;color:#fff;font-size:.76rem;cursor:pointer;font-weight:800;transition:all .2s;display:inline-flex;align-items:center;gap:5px;box-shadow:0 4px 14px rgba(220,38,38,.4);}
+.svb-cancel:hover{background:linear-gradient(135deg,#ef4444,#b91c1c);transform:translateY(-1px);box-shadow:0 6px 18px rgba(220,38,38,.6);}
+
+/* MOVIES OVERLAY */
+#movies-overlay{position:fixed;inset:0;z-index:100;overflow-y:auto;background:linear-gradient(to bottom,rgba(0,0,0,.55),rgba(4,4,20,.92));padding:76px 32px 48px;display:none;}
+.ov-title{font-size:2.2rem;font-weight:900;background:linear-gradient(135deg,#fff,#00e5ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px;}
+.ov-sub{color:rgba(255,255,255,.4);font-size:.88rem;margin-bottom:32px;letter-spacing:.02em;}
+.movie-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:22px;}
+.mcard{background:rgba(10,10,28,.92);border:1px solid rgba(255,255,255,.07);border-radius:18px;overflow:hidden;cursor:pointer;transition:all .35s cubic-bezier(.34,1.4,.64,1);backdrop-filter:blur(12px);}
+.mcard:hover{transform:translateY(-10px) scale(1.025);border-color:#f5c518;box-shadow:0 24px 60px rgba(245,197,24,.22),0 0 0 1px rgba(245,197,24,.12);}
+.mposter{height:300px;display:flex;align-items:center;justify-content:center;font-size:5.5rem;position:relative;background-size:cover;background-position:center;background-repeat:no-repeat;overflow:hidden;}
+.mposter-img{width:100%;height:100%;object-fit:cover;transition:transform .4s ease;}
+.mcard:hover .mposter-img{transform:scale(1.06);}
+.mposter::after{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(10,10,28,1) 0%,rgba(10,10,28,.1) 50%,transparent 100%);pointer-events:none;}
+.mrating{position:absolute;top:12px;right:12px;background:rgba(0,0,0,.7);border:1px solid rgba(245,197,24,.35);border-radius:8px;padding:4px 10px;font-size:.72rem;font-weight:800;color:#f5c518;z-index:1;backdrop-filter:blur(8px);}
+.minfo{padding:16px;}
+.mtitle{font-weight:800;font-size:1rem;margin-bottom:7px;line-height:1.3;}
+.mbadges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.mb{padding:3px 9px;border-radius:999px;font-size:.67rem;font-weight:700;}
+.mb-gold{background:rgba(245,197,24,.14);color:#f5c518;}
+.mb-cyan{background:rgba(0,229,255,.12);color:#00e5ff;}
+.mb-pink{background:rgba(255,68,170,.12);color:#ff44aa;}
+.mmeta{font-size:.74rem;color:rgba(255,255,255,.4);display:flex;gap:10px;flex-wrap:wrap;}
+.mbook-btn{margin-top:14px;width:100%;padding:10px;background:linear-gradient(135deg,#f5c518,#ff9900);color:#000;border:none;border-radius:10px;font-weight:800;font-size:.84rem;cursor:pointer;transition:all .25s;}
+.mbook-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(245,197,24,.35);}
+
+/* SHOWTIME MODAL */
+#st-modal{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.82);backdrop-filter:blur(12px);display:none;align-items:center;justify-content:center;}
+#st-box{background:linear-gradient(135deg,#0d111f,#111827);border:1px solid rgba(0,229,255,.2);border-radius:22px;padding:30px;width:90%;max-width:530px;animation:popIn .35s cubic-bezier(.34,1.56,.64,1);}
+@keyframes popIn{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+.stm-title{font-size:1.3rem;font-weight:900;margin-bottom:4px;}
+.stm-sub{font-size:.8rem;color:rgba(255,255,255,.38);margin-bottom:22px;}
+.st-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.stcard{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:18px;cursor:pointer;transition:all .25s;text-align:center;}
+.stcard:hover,.stcard.sel{background:rgba(245,197,24,.1);border-color:#f5c518;box-shadow:0 0 24px rgba(245,197,24,.22);}
+.st-time{font-size:1.4rem;font-weight:900;color:#f5c518;}
+.st-label{font-size:.72rem;color:rgba(255,255,255,.4);margin-top:3px;}
+.st-hall{font-size:.7rem;color:#00e5ff;margin-top:7px;}
+.st-avail{font-size:.68rem;color:rgba(255,255,255,.3);margin-top:5px;}
+.modal-actions{display:flex;gap:10px;margin-top:22px;}
+
+/* CINEMA UI */
+#cinema-ui{position:fixed;inset:0;z-index:150;pointer-events:none;display:none;}
+#cinema-topbar{position:absolute;top:60px;left:18px;pointer-events:all;display:flex;align-items:center;gap:14px;}
+.back-btn{padding:9px 18px;background:rgba(0,0,0,.78);border:1px solid rgba(255,255,255,.15);border-radius:10px;cursor:pointer;font-size:.8rem;backdrop-filter:blur(14px);transition:all .25s;color:#fff;font-weight:600;}
+.back-btn:hover{border-color:#f5c518;color:#f5c518;}
+.movie-chip{background:rgba(0,0,0,.78);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:9px 18px;backdrop-filter:blur(14px);font-size:.82rem;}
+#chip-title{font-weight:800;color:#f5c518;}
+#chip-time{color:rgba(255,255,255,.45);font-size:.74rem;margin-top:2px;}
+
+/* LEGEND */
+#legend{position:absolute;bottom:24px;left:18px;pointer-events:all;display:flex;gap:12px;flex-wrap:wrap;background:rgba(0,0,0,.8);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px 18px;backdrop-filter:blur(16px);}
+.leg{display:flex;align-items:center;gap:8px;font-size:.73rem;color:rgba(255,255,255,.6);}
+.legbox{width:18px;height:14px;border-radius:4px;}
+
+/* BOOKING PANEL */
+#book-panel{position:absolute;bottom:24px;right:18px;width:310px;background:rgba(4,4,20,.95);border:1px solid rgba(0,229,255,.18);border-radius:18px;padding:20px;backdrop-filter:blur(22px);pointer-events:all;box-shadow:0 20px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);}
+.bp-head{font-size:.9rem;font-weight:800;color:#00e5ff;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.bp-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:.8rem;}
+.bp-row:last-of-type{border:none;}
+.bpl{color:rgba(255,255,255,.4);}
+.bpv{font-weight:600;font-size:.78rem;max-width:170px;text-align:right;color:rgba(255,255,255,.85);}
+.total-block{background:linear-gradient(135deg,rgba(245,197,24,.1),rgba(255,107,53,.08));border:1px solid rgba(245,197,24,.2);border-radius:12px;padding:12px 16px;margin:12px 0;display:flex;justify-content:space-between;align-items:center;}
+.tot-label{font-weight:800;color:#f5c518;font-size:.88rem;}
+.tot-amt{font-size:1.4rem;font-weight:900;color:#f5c518;font-variant-numeric:tabular-nums;}
+.proceed-btn{width:100%;padding:14px;background:linear-gradient(135deg,#f5c518,#ff9900);color:#000;border:none;border-radius:12px;font-weight:900;font-size:.92rem;cursor:pointer;margin-top:4px;transition:all .3s;letter-spacing:.02em;}
+.proceed-btn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(245,197,24,.5);}
+.proceed-btn:disabled{opacity:.3;cursor:default;transform:none;box-shadow:none;}
+.bp-note{font-size:.66rem;color:rgba(255,255,255,.22);text-align:center;margin-top:9px;}
+
+/* TOOLTIP */
+#seat-tooltip{position:fixed;z-index:500;background:rgba(0,0,10,.92);border:1px solid rgba(0,229,255,.25);border-radius:10px;padding:7px 14px;font-size:.77rem;pointer-events:none;display:none;backdrop-filter:blur(10px);box-shadow:0 4px 20px rgba(0,0,0,.4);}
+
+/* MODALS */
+#cust-modal{position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.85);backdrop-filter:blur(14px);display:none;align-items:center;justify-content:center;}
+#cust-box{background:linear-gradient(135deg,#0d111f,#111827);border:1px solid rgba(0,229,255,.22);border-radius:22px;padding:32px;width:90%;max-width:420px;animation:popIn .35s cubic-bezier(.34,1.56,.64,1);}
+.cm-title{font-size:1.4rem;font-weight:900;color:#f5c518;margin-bottom:4px;}
+.cm-sub{font-size:.8rem;color:rgba(255,255,255,.38);margin-bottom:24px;}
+.fg{margin-bottom:16px;}
+.fl{display:block;font-size:.7rem;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;font-weight:700;}
+.fi{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:#fff;font-size:.9rem;outline:none;transition:all .25s;}
+.fi:focus{border-color:#00e5ff;box-shadow:0 0 0 3px rgba(0,229,255,.12);}
+.fi::placeholder{color:rgba(255,255,255,.2);}
+#ticket-modal{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.9);backdrop-filter:blur(16px);display:none;align-items:center;justify-content:center;overflow-y:auto;padding:20px;}
+#ticket-box{background:linear-gradient(135deg,#0d1117,#1a1f2e);border:1px solid rgba(245,197,24,.28);border-radius:24px;padding:32px;max-width:470px;width:100%;position:relative;overflow:hidden;animation:popIn .4s cubic-bezier(.34,1.56,.64,1);}
+#ticket-box::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:conic-gradient(from 0deg,transparent,rgba(245,197,24,.05),transparent,rgba(0,229,255,.05),transparent);animation:spin 10s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tk-movie{font-size:1.5rem;font-weight:900;text-align:center;position:relative;z-index:1;}
+.tk-genre{font-size:.8rem;color:rgba(255,255,255,.38);text-align:center;margin-top:5px;position:relative;z-index:1;}
+.tk-divider{border:none;border-top:2px dashed rgba(255,255,255,.1);margin:20px -32px;position:relative;z-index:1;}
+.tk-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0;position:relative;z-index:1;}
+.tk-cell-label{font-size:.66rem;color:rgba(255,255,255,.32);margin-bottom:5px;text-transform:uppercase;letter-spacing:.08em;}
+.tk-cell-val{font-weight:800;font-size:.92rem;}
+.bid-box{background:rgba(245,197,24,.08);border:1px solid rgba(245,197,24,.2);border-radius:14px;padding:16px;text-align:center;margin-top:18px;position:relative;z-index:1;}
+.bid-label{font-size:.66rem;color:rgba(255,255,255,.32);text-transform:uppercase;letter-spacing:.12em;margin-bottom:7px;}
+.bid-num{font-size:1.6rem;font-weight:900;color:#f5c518;letter-spacing:.1em;font-family:'Courier New',monospace;}
+
+/* LUXURY TICKET QR CODE */
+.tk-qr-wrap{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  margin:18px auto 6px;
+  position:relative;
+  z-index:1;
+}
+.tk-qr-card{
+  background:#fff;
+  padding:10px;
+  border-radius:16px;
+  box-shadow:0 10px 30px rgba(0,0,0,.6), 0 0 20px rgba(0,229,255,.2);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.tk-qr-card canvas{
+  position:static !important;
+  width:140px !important;
+  height:140px !important;
+  border-radius:8px;
+  display:block;
+}
+.tk-qr-hint{
+  font-size:.7rem;
+  color:rgba(255,255,255,.45);
+  margin-top:8px;
+  letter-spacing:.04em;
+  font-weight:600;
+  display:flex;
+  align-items:center;
+  gap:5px;
+}
+.tk-qr-hint span{color:#00e5ff;}
+
+.ticket-actions{display:flex;gap:10px;margin-top:24px;position:relative;z-index:1;}
+#bookings-overlay{position:fixed;inset:0;z-index:100;overflow-y:auto;background:rgba(0,0,0,.88);backdrop-filter:blur(12px);padding:76px 32px 48px;display:none;}
+.bk-item{background:rgba(10,10,28,.95);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:14px;transition:all .28s;}
+.bk-item:hover{border-color:#00e5ff;box-shadow:0 0 24px rgba(0,229,255,.1);}
+.bk-status{padding:4px 12px;border-radius:999px;font-size:.7rem;font-weight:800;}
+.s-conf{background:rgba(0,200,100,.14);color:#00c864;}
+.s-canc{background:rgba(220,50,50,.14);color:#ff4444;}
+.cancel-btn{background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;border:none;border-radius:9px;padding:8px 16px;font-size:.76rem;font-weight:700;cursor:pointer;transition:opacity .25s;}
+.cancel-btn:hover{opacity:.8;}
+.btn-primary{padding:12px 24px;background:linear-gradient(135deg,#f5c518,#ff9900);color:#000;border:none;border-radius:12px;font-weight:800;cursor:pointer;font-size:.9rem;transition:all .25s;display:inline-flex;align-items:center;gap:7px;}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(245,197,24,.4);}
+.btn-secondary{padding:12px 24px;background:transparent;color:#00e5ff;border:1px solid rgba(0,229,255,.4);border-radius:12px;font-weight:600;cursor:pointer;font-size:.9rem;transition:all .25s;display:inline-flex;align-items:center;gap:7px;}
+.btn-secondary:hover{background:rgba(0,229,255,.1);}
+#toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);z-index:999;background:rgba(0,20,40,.97);border:1px solid #00e5ff;border-radius:14px;padding:12px 24px;font-size:.88rem;font-weight:700;box-shadow:0 8px 32px rgba(0,229,255,.25);transition:transform .4s cubic-bezier(.34,1.56,.64,1);pointer-events:none;}
+#toast.show{transform:translateX(-50%) translateY(0);}
+.particle{position:fixed;border-radius:50%;pointer-events:none;z-index:998;animation:burst var(--t) ease-out forwards;}
+@keyframes burst{0%{transform:translate(0,0) scale(1);opacity:1;}100%{transform:translate(var(--x),var(--y)) scale(0);opacity:0;}}
+#cancel-modal{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.85);backdrop-filter:blur(12px);display:none;align-items:center;justify-content:center;}
+#cancel-box{background:#0d1117;border:1px solid rgba(220,50,50,.4);border-radius:20px;padding:30px;width:90%;max-width:380px;animation:popIn .3s cubic-bezier(.34,1.56,.64,1);}
+
+/* GLOW PULSE */
+@keyframes seatPulse{0%,100%{box-shadow:0 0 0 rgba(245,197,24,0);}50%{box-shadow:0 0 20px rgba(245,197,24,.6);}}
+.lang-selector{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  pointer-events:all;
+  flex-wrap:wrap;
+  margin:18px 0 24px;
+}
+.lang-pill{
+  padding:7px 18px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.15);
+  background:rgba(18,22,38,.85);
+  color:rgba(255,255,255,.75);
+  cursor:pointer;
+  font-size:.82rem;
+  font-weight:700;
+  backdrop-filter:blur(14px);
+  transition:all .25s ease;
+  user-select:none;
+}
+.lang-pill:hover{
+  border-color:#00e5ff;
+  color:#00e5ff;
+  transform:translateY(-1px);
+  box-shadow:0 4px 14px rgba(0,229,255,.2);
+}
+.lang-pill.active{
+  background:linear-gradient(135deg,rgba(245,197,24,.25),rgba(255,107,53,.2));
+  border-color:#f5c518;
+  color:#f5c518;
+  box-shadow:0 0 16px rgba(245,197,24,.35);
+}
+/* RESPONSIVE DESIGN (MOBILE, TABLET & DESKTOP) */
+@media (max-width: 768px) {
+  #topnav {
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .logo { font-size: 1.25rem; }
+  .theatre-badge {
+    padding: 4px 10px 4px 8px;
+    gap: 6px;
+  }
+  .tb-name { max-width: 130px; font-size: .75rem; }
+  .nav-btns { gap: 4px; }
+  .nbtn { padding: 6px 12px; font-size: .72rem; }
+  #camviews {
+    top: auto;
+    bottom: 230px;
+    right: 10px;
+    gap: 4px;
+  }
+  .cvbtn { padding: 6px 10px; font-size: .68rem; }
+  #cinema-topbar {
+    top: 54px;
+    left: 10px;
+    gap: 8px;
+  }
+  .movie-chip { padding: 6px 12px; font-size: .74rem; }
+  #legend {
+    bottom: 12px;
+    left: 10px;
+    padding: 8px 12px;
+    gap: 8px;
+    display: none; /* Auto-hide legend on mobile to keep 3D view clean */
+  }
+  #book-panel {
+    bottom: 12px;
+    right: 10px;
+    left: 10px;
+    width: auto;
+    padding: 14px;
+    border-radius: 14px;
+  }
+  .bp-head { font-size: .82rem; margin-bottom: 10px; }
+  .bp-row { padding: 5px 0; font-size: .75rem; }
+  .total-block { padding: 8px 12px; margin: 8px 0; }
+  .proceed-btn { padding: 11px; font-size: .85rem; }
+  #movies-overlay { padding: 64px 16px 32px; }
+  .ov-title { font-size: 1.6rem; }
+  .movie-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 14px;
+  }
+  .mposter { height: 210px; }
+  .minfo { padding: 12px; }
+  .mtitle { font-size: .88rem; }
+  .tm-list { grid-template-columns: 1fr; }
+  .st-grid { grid-template-columns: 1fr; }
+  #ticket-box { padding: 20px; }
+  .tk-grid { gap: 10px; margin: 10px 0; }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  #topnav { padding: 12px 18px; }
+  .tb-name { max-width: 180px; }
+  .movie-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 18px; }
+  #book-panel { width: 280px; }
+}
+/* PAYMENT METHOD GATEWAYS */
+.pm-group{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:10px;
+  margin:12px 0 16px;
+}
+.pm-tab{
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:12px;
+  padding:12px 8px;
+  text-align:center;
+  cursor:pointer;
+  transition:all .25s ease;
+  user-select:none;
+}
+.pm-tab:hover{
+  background:rgba(0,229,255,.08);
+  border-color:#00e5ff;
+}
+.pm-tab.active{
+  background:linear-gradient(135deg,rgba(0,229,255,.18),rgba(0,102,255,.15));
+  border-color:#00e5ff;
+  box-shadow:0 0 18px rgba(0,229,255,.25);
+}
+.pm-tab-icon{font-size:1.4rem;margin-bottom:4px;}
+.pm-tab-title{font-size:.74rem;font-weight:800;color:#fff;}
+.pm-tab.active .pm-tab-title{color:#00e5ff;}
+.pm-panel{
+  background:rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;
+  padding:16px;
+  margin-bottom:18px;
+}
+.upi-apps{
+  display:flex;
+  gap:8px;
+  margin-top:10px;
+  flex-wrap:wrap;
+}
+.upi-chip{
+  padding:6px 12px;
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:999px;
+  font-size:.7rem;
+  font-weight:700;
+  cursor:pointer;
+  transition:all .2s;
+}
+.upi-chip:hover, .upi-chip.active{
+  background:rgba(245,197,24,.18);
+  border-color:#f5c518;
+  color:#f5c518;
+}
+.wallet-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.wallet-opt{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:10px;
+  cursor:pointer;
+  font-size:.75rem;
+  font-weight:700;
+  transition:all .2s;
+}
+.wallet-opt:hover, .wallet-opt.active{
+  border-color:#00e5ff;
+  background:rgba(0,229,255,.1);
+  color:#00e5ff;
+}
+</style>
+</head>
+<body>
+<!-- LOADER -->
+<div id="loader">
+  <div class="loader-logo">🎬 ScreenSeat 3D</div>
+  <div class="loader-bar"><div class="loader-fill"></div></div>
+  <div class="loader-txt">Building Cinema Experience...</div>
+  <button class="loader-btn" onclick="dismissLoader()">Enter Cinema ➔</button>
+</div>
+
+<canvas id="c"></canvas>
+
+<!-- THEATRE SELECTOR MODAL -->
+<div id="theatre-modal">
+  <div id="theatre-box">
+    <div class="tm-head">
+      <div>
+        <div class="tm-title">📍 Select Cinema in Bengaluru</div>
+        <div style="font-size:.78rem;color:rgba(255,255,255,.45);margin-top:2px;">Showing 10 top multiplexes and iconic single screens across the city</div>
+      </div>
+      <button class="tm-close" onclick="closeTheatreModal()">✕</button>
+    </div>
+    <input class="tm-search" id="tm-search-inp" type="text" placeholder="🔍 Search theatre, area (e.g. Koramangala, IMAX, Whitefield)..." oninput="filterTheatres(this.value)"/>
+    <div class="tm-list" id="tm-list"></div>
+  </div>
+</div>
+
+<!-- TOP NAV -->
+<div id="topnav">
+  <div style="display:flex;align-items:center;gap:20px;">
+    <div class="logo" onclick="showMovies()">🎬 ScreenSeat</div>
+    <div class="theatre-badge" id="tb-btn" onclick="openTheatreModal()">
+      <div class="tb-pulse"></div>
+      <div class="tb-city">Bengaluru</div>
+      <div class="tb-divider"></div>
+      <div class="tb-name" id="tb-curr-name">PVR INOX · Orion Mall</div>
+      <div class="tb-arrow">▼</div>
+    </div>
+  </div>
+  <div class="nav-btns">
+    <button class="nbtn active" id="nb-movies" onclick="showMovies()">🎬 Movies</button>
+    <button class="nbtn" id="nb-seats" disabled>💺 Select Seats</button>
+    <button class="nbtn" id="nb-bookings" onclick="showBookings()">📋 My Bookings</button>
+  </div>
+</div>
+
+<!-- CAMERA VIEWS -->
+<div id="camviews">
+  <div class="cam-label">Camera View</div>
+  <button class="cvbtn active" data-view="overview" onclick="setCam('overview',this)">🌐 Overview</button>
+  <button class="cvbtn" data-view="screen" onclick="setCam('screen',this)">🎬 Near Screen</button>
+  <button class="cvbtn" data-view="balcony" onclick="setCam('balcony',this)">🏛 Balcony</button>
+  <button class="cvbtn" data-view="top" onclick="setCam('top',this)">🔭 Top View</button>
+  <button class="cvbtn" data-view="side" onclick="setCam('side',this)">📐 Side View</button>
+</div>
+
+<!-- SEAT VIEW BANNER -->
+<div id="seat-view-banner">
+  <div class="svb-title" id="svb-title">👁 View from Seat A1</div>
+  <div class="svb-sub">Your real-time screen perspective from this seat</div>
+  <div class="svb-actions">
+    <button class="svb-back" onclick="exitSeatView()">↩ Back to Overview</button>
+    <button class="svb-cancel" id="svb-cancel-btn" onclick="cancelCurrentSeatFromView()">✕ Cancel Seat</button>
+  </div>
+</div>
+
+<!-- MOVIES OVERLAY -->
+<div id="movies-overlay">
+  <div class="ov-title">🎬 Now Showing</div>
+  <div class="ov-sub">Select a movie to enter the immersive 3D cinema experience</div>
+  <!-- Interactive Language Filter Bar -->
+  <div class="lang-selector" id="lang-selector"></div>
+  <div class="movie-grid" id="movie-grid"></div>
+</div>
+
+<!-- SHOWTIME MODAL -->
+<div id="st-modal">
+  <div id="st-box">
+    <div class="stm-title" id="stm-title">Select Showtime</div>
+    <div class="stm-sub" id="stm-sub">Choose your preferred date and time</div>
+    <div class="st-grid" id="st-grid"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" style="flex:1;justify-content:center;" onclick="closeSTModal()">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- CINEMA UI -->
+<div id="cinema-ui">
+  <div id="cinema-topbar">
+    <button class="back-btn" onclick="showMovies()">← Movies</button>
+    <div class="movie-chip">
+      <div id="chip-title">—</div>
+      <div id="chip-time">—</div>
+    </div>
+  </div>
+  <div id="legend">
+    <div class="leg"><div class="legbox" style="background:#1a7a3e;border:1px solid rgba(0,220,80,.25)"></div>Available</div>
+    <div class="leg"><div class="legbox" style="background:#1e3a8a;border:1px solid rgba(60,100,255,.3)"></div>VIP</div>
+    <div class="leg"><div class="legbox" style="background:#f5c518;box-shadow:0 0 8px rgba(245,197,24,.6)"></div>Selected</div>
+    <div class="leg"><div class="legbox" style="background:#5a1515;border:1px solid rgba(200,30,30,.2)"></div>Booked</div>
+  </div>
+  <div id="book-panel">
+    <div class="bp-head">🎟 Your Selection</div>
+    <div class="bp-row"><span class="bpl">Movie</span><span class="bpv" id="bp-movie">—</span></div>
+    <div class="bp-row"><span class="bpl">Showtime</span><span class="bpv" id="bp-time">—</span></div>
+    <div class="bp-row"><span class="bpl">Hall</span><span class="bpv" id="bp-hall">—</span></div>
+    <div class="bp-row"><span class="bpl">Seats</span><span class="bpv" id="bp-seats">None selected</span></div>
+    <div class="bp-row"><span class="bpl">Type</span><span class="bpv" id="bp-type">—</span></div>
+    <div class="total-block">
+      <span class="tot-label">Total</span>
+      <span class="tot-amt" id="bp-total">₹0</span>
+    </div>
+    <button class="proceed-btn" id="proc-btn" onclick="openCustModal()" disabled>Book Seats →</button>
+    <div class="bp-note">Max 6 seats · Click seat to select · Click again or ✕ to cancel</div>
+  </div>
+</div>
+
+<div id="seat-tooltip"></div>
+
+<!-- CUSTOMER MODAL WITH PAYMENT GATEWAYS -->
+<div id="cust-modal">
+  <div id="cust-box" style="max-width:480px;">
+    <div class="cm-title">👤 Details & Payment</div>
+    <div class="cm-sub">Enter customer details and select payment gateway</div>
+    
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="fg">
+        <label class="fl">Full Name *</label>
+        <input class="fi" id="inp-name" type="text" placeholder="e.g. Shankadhara N S" maxlength="60"/>
+      </div>
+      <div class="fg">
+        <label class="fl">Mobile Number *</label>
+        <input class="fi" id="inp-phone" type="tel" placeholder="10-digit mobile" maxlength="10"/>
+      </div>
+    </div>
+    
+    <div class="fg" style="margin-bottom:12px;">
+      <label class="fl">Email (optional)</label>
+      <input class="fi" id="inp-email" type="email" placeholder="you@email.com"/>
+    </div>
+
+    <!-- PAYMENT METHOD SELECTOR -->
+    <label class="fl">Payment Gateway *</label>
+    <div class="pm-group">
+      <div class="pm-tab active" id="pmt-upi" onclick="selectPaymentMethod('upi')">
+        <div class="pm-tab-icon">⚡</div>
+        <div class="pm-tab-title">UPI / QR</div>
+      </div>
+      <div class="pm-tab" id="pmt-card" onclick="selectPaymentMethod('card')">
+        <div class="pm-tab-icon">💳</div>
+        <div class="pm-tab-title">Cards</div>
+      </div>
+      <div class="pm-tab" id="pmt-wallet" onclick="selectPaymentMethod('wallet')">
+        <div class="pm-tab-icon">👛</div>
+        <div class="pm-tab-title">Wallets</div>
+      </div>
+    </div>
+
+    <!-- UPI GATEWAY PANEL -->
+    <div class="pm-panel" id="panel-upi">
+      <div style="font-size:.78rem;font-weight:700;color:#00e5ff;margin-bottom:6px;">Instant UPI Transfer</div>
+      <input class="fi" id="inp-upi-id" type="text" placeholder="e.g. 9876543210@ybl or @paytm" value="user@okhdfcbank" style="padding:10px 14px;font-size:.82rem;"/>
+      <div class="upi-apps">
+        <span class="upi-chip active" onclick="setUpiApp(this, '@okhdfcbank')">GPay</span>
+        <span class="upi-chip" onclick="setUpiApp(this, '@ybl')">PhonePe</span>
+        <span class="upi-chip" onclick="setUpiApp(this, '@paytm')">Paytm</span>
+        <span class="upi-chip" onclick="setUpiApp(this, '@upi')">BHIM</span>
+      </div>
+    </div>
+
+    <!-- CARDS GATEWAY PANEL -->
+    <div class="pm-panel" id="panel-card" style="display:none;">
+      <div style="font-size:.78rem;font-weight:700;color:#00e5ff;margin-bottom:8px;">Credit / Debit Card</div>
+      <input class="fi" id="inp-card-num" type="text" placeholder="Card Number (XXXX XXXX XXXX XXXX)" maxlength="19" value="4532 •••• •••• 8892" style="padding:10px 14px;font-size:.82rem;margin-bottom:8px;"/>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <input class="fi" id="inp-card-exp" type="text" placeholder="MM/YY" maxlength="5" value="08/29" style="padding:10px 14px;font-size:.82rem;"/>
+        <input class="fi" id="inp-card-cvv" type="password" placeholder="CVV" maxlength="3" value="789" style="padding:10px 14px;font-size:.82rem;"/>
+      </div>
+    </div>
+
+    <!-- WALLETS GATEWAY PANEL -->
+    <div class="pm-panel" id="panel-wallet" style="display:none;">
+      <div style="font-size:.78rem;font-weight:700;color:#00e5ff;margin-bottom:8px;">Select Digital Wallet</div>
+      <div class="wallet-grid">
+        <div class="wallet-opt active" onclick="setWallet(this, 'Paytm Wallet')">🟢 Paytm Wallet</div>
+        <div class="wallet-opt" onclick="setWallet(this, 'Amazon Pay')">🟠 Amazon Pay</div>
+        <div class="wallet-opt" onclick="setWallet(this, 'MobiKwik')">🔵 MobiKwik</div>
+        <div class="wallet-opt" onclick="setWallet(this, 'Freecharge')">🟣 Freecharge</div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" style="flex:1;justify-content:center;" onclick="closeCustModal()">Cancel</button>
+      <button class="btn-primary" id="btn-pay-confirm" style="flex:1;justify-content:center;" onclick="confirmBooking()">🔒 Pay & Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- TICKET MODAL -->
+<div id="ticket-modal">
+  <div id="ticket-box">
+    <div style="text-align:center;position:relative;z-index:1;font-size:3.5rem;margin-bottom:10px;" id="tk-emoji"></div>
+    <div class="tk-movie" id="tk-movie"></div>
+    <div class="tk-genre" id="tk-genre"></div>
+    <hr class="tk-divider"/>
+    <div class="tk-grid">
+      <div><div class="tk-cell-label">DATE & TIME</div><div class="tk-cell-val" id="tk-time"></div></div>
+      <div><div class="tk-cell-label">HALL</div><div class="tk-cell-val" id="tk-hall"></div></div>
+      <div><div class="tk-cell-label">SEATS</div><div class="tk-cell-val" style="color:#f5c518" id="tk-seats"></div></div>
+      <div><div class="tk-cell-label">AMOUNT</div><div class="tk-cell-val" style="color:#00e5ff" id="tk-total"></div></div>
+      <div><div class="tk-cell-label">CUSTOMER</div><div class="tk-cell-val" id="tk-cust"></div></div>
+      <div><div class="tk-cell-label">PAYMENT</div><div class="tk-cell-val" style="color:#2ecc71" id="tk-payment"></div></div>
+    </div>
+    <div class="bid-box">
+      <div class="bid-label">Booking ID</div>
+      <div class="bid-num" id="tk-bid"></div>
+    </div>
+    <!-- TICKET QR CODE -->
+    <div class="tk-qr-wrap">
+      <div class="tk-qr-card">
+        <canvas id="tk-qrcode"></canvas>
+      </div>
+      <div class="tk-qr-hint"><span>⚡ SCAN AT GATE</span> · Verified Gate Pass</div>
+    </div>
+    <div style="font-size:.68rem;color:rgba(255,255,255,.2);text-align:center;margin-top:10px;position:relative;z-index:1;">Show this QR code at cinema hall entrance • ScreenSeat 3D</div>
+    <div class="ticket-actions">
+      <button class="btn-secondary" style="flex:1;justify-content:center;" onclick="closeTicket();showMovies()">← New Booking</button>
+      <button class="btn-secondary" style="flex:1;justify-content:center;" onclick="closeTicket();showBookings()">📋 My Bookings</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOOKINGS OVERLAY -->
+<div id="bookings-overlay">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;flex-wrap:wrap;gap:12px;">
+    <div>
+      <div class="ov-title">📋 My Bookings</div>
+      <div class="ov-sub" style="margin:0">All your cinema reservations</div>
+    </div>
+    <button class="btn-primary" onclick="showMovies()">+ New Booking</button>
+  </div>
+  <div id="bookings-list"></div>
+</div>
+
+<!-- CANCEL MODAL -->
+<div id="cancel-modal">
+  <div id="cancel-box">
+    <div style="font-size:1.2rem;font-weight:900;color:#ef4444;margin-bottom:8px;">⚠️ Cancel Booking?</div>
+    <div style="font-size:.85rem;color:rgba(255,255,255,.5);margin-bottom:22px;">Cancel booking <strong id="cancel-bid-txt" style="color:#f5c518"></strong>? Seats will be released.</div>
+    <div class="modal-actions">
+      <button class="btn-secondary" style="flex:1;justify-content:center;" onclick="closeCancelModal()">Keep It</button>
+      <button class="btn-primary" style="flex:1;justify-content:center;background:linear-gradient(135deg,#dc2626,#991b1b);" onclick="executeCancel()">Yes, Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast">🎬 Done!</div>
+
+<script>
+// ── DATA ──
+// ── 10 ICONIC BANGALORE THEATRES ──
+var THEATRES=[
+  {id:'pvr_orion',name:'PVR INOX · Orion Mall',area:'Rajajinagar, Bengaluru',tags:['IMAX Laser','4DX','Dolby Atmos','P[XL]'],screens:['IMAX Laser · Audi 1','4DX · Audi 2','Dolby Atmos · Audi 3','P[XL] · Audi 4']},
+  {id:'pvr_vega',name:'PVR Superplex · Vega City',area:'Bannerghatta Rd, Bengaluru',tags:['IMAX 3D','LUXE','Dolby Atmos','PlayHouse'],screens:['IMAX 3D · Audi 1','LUXE · Audi 2','Dolby Atmos · Audi 3']},
+  {id:'pvr_forum_koramangala',name:'PVR Cinemas · The Forum Mall',area:'Koramangala, Bengaluru',tags:['Gold Class','IMAX','Dolby Atmos'],screens:['Gold Class · Audi 1','Dolby Atmos · Audi 2','IMAX · Audi 3']},
+  {id:'inox_mantri',name:'INOX · Mantri Square',area:'Malleshwaram, Bengaluru',tags:['Insignia','Dolby Atmos','Laser Screen'],screens:['Insignia · Audi 1','Dolby Atmos · Audi 2','Laser · Audi 3']},
+  {id:'cinepolis_forummall',name:'Cinépolis · Forum Shantiniketan',area:'Whitefield, Bengaluru',tags:['VIP Screen','Macro XE','RealD 3D'],screens:['VIP Screen · Audi 1','Dolby Atmos · Audi 2','Macro XE · Audi 3']},
+  {id:'pvr_phoenix_marketcity',name:'PVR Cinemas · Phoenix Marketcity',area:'Mahadevapura, Bengaluru',tags:['IMAX 3D','4DX','Dolby Atmos'],screens:['IMAX 3D · Audi 1','4DX · Audi 2','Dolby Atmos · Audi 3']},
+  {id:'inox_garuda',name:'INOX · Garuda Mall',area:'Magrath Rd, Ashok Nagar, Bengaluru',tags:['Insignia VIP','Dolby 7.1'],screens:['Insignia VIP · Audi 1','Dolby Atmos · Audi 2','Audi 3']},
+  {id:'urvashi',name:'Urvashi Digital 4K Cinema',area:'Lalbagh Road, Bengaluru',tags:['RGB 4K Laser','Dolby Atmos','Giant Screen'],screens:['Main Screen 4K RGB Laser Dolby Atmos']},
+  {id:'cinepolis_lulu',name:'Cinépolis · Global Malls (Lulu Mall)',area:'Rajajinagar, Bengaluru',tags:['Cinestar VIP','Macro XE','4DX'],screens:['Cinestar VIP · Audi 1','Macro XE · Audi 2','Audi 3']},
+  {id:'santhosh',name:'Santhosh Theatre',area:'Kempegowda Road (Gandhinagar), Bengaluru',tags:['Heritage Cinema','Dolby 7.1','Single Screen'],screens:['Main Heritage Screen 4K']},
+];
+var activeTheatre=THEATRES[0];
+
+function openTheatreModal(){
+  document.getElementById('theatre-modal').style.display='flex';
+  document.getElementById('tb-btn').classList.add('open');
+  renderTheatreList(THEATRES);
+  document.getElementById('tm-search-inp').value='';
+  document.getElementById('tm-search-inp').focus();
+}
+function closeTheatreModal(){
+  document.getElementById('theatre-modal').style.display='none';
+  document.getElementById('tb-btn').classList.remove('open');
+}
+function filterTheatres(q){
+  var term = (q||'').toLowerCase().trim();
+  var filtered = THEATRES.filter(function(t){
+    return t.name.toLowerCase().indexOf(term)>=0 || t.area.toLowerCase().indexOf(term)>=0 || t.tags.some(function(tag){return tag.toLowerCase().indexOf(term)>=0;});
+  });
+  renderTheatreList(filtered);
+}
+function renderTheatreList(list){
+  var el=document.getElementById('tm-list');
+  if(!list.length){
+    el.innerHTML='<div style="grid-column:span 2;text-align:center;padding:30px;color:rgba(255,255,255,.4);">No theatres found matching your search.</div>';
+    return;
+  }
+  el.innerHTML=list.map(function(t){
+    var isSel = t.id === activeTheatre.id;
+    return '<div class="tcard '+(isSel?'sel':'')+'" onclick="pickTheatre(\''+t.id+'\')">'+
+      '<div class="tc-name">'+t.name+'</div>'+
+      '<div class="tc-area">📍 '+t.area+'</div>'+
+      '<div class="tc-screens">'+t.tags.map(function(tag){return '<span class="tc-badge">'+tag+'</span>';}).join('')+'</div>'+
+      '</div>';
+  }).join('');
+}
+function pickTheatre(tid){
+  activeTheatre=THEATRES.find(function(t){return t.id===tid;})||THEATRES[0];
+  document.getElementById('tb-curr-name').textContent=activeTheatre.name;
+  closeTheatreModal();
+  showToast('📍 Switched to ' + activeTheatre.name);
+  renderMovies();
+  if(activeMovie && document.getElementById('st-modal').style.display==='flex'){
+    openSTModal();
+  }
+}
+
+// ── 12 ALL-TIME INDIAN BLOCKBUSTER MOVIES ──
+var MOVIES=[
+  {id:1,title:"K.G.F: Chapter 2",genre:"Action · Period Drama",rating:"UA",dur:"2h 48m",lang:"Kannada/Hindi/Telugu",poster:"posters/kgf2.jpg",emoji:"👑",col:"linear-gradient(135deg,#2b1700,#543000,#170c00)",price:{r:250,v:600}},
+  {id:2,title:"Baahubali 2: The Conclusion",genre:"Epic · Action Drama",rating:"UA",dur:"2h 47m",lang:"Telugu/Hindi/Tamil",poster:"posters/baahubali2.jpg",emoji:"⚔️",col:"linear-gradient(135deg,#361600,#6b2c00,#1f0c00)",price:{r:240,v:580}},
+  {id:3,title:"RRR (Rise Roar Revolt)",genre:"Action · Historic Fiction",rating:"UA",dur:"3h 7m",lang:"Telugu/Hindi/Kannada",poster:"posters/rrr.jpg",emoji:"🔥",col:"linear-gradient(135deg,#381200,#752600,#240800)",price:{r:250,v:600}},
+  {id:4,title:"Ramayana: Part 1",genre:"Mythology · Epic",rating:"UA",dur:"3h 10m",lang:"Hindi/Kannada/Telugu",poster:"posters/ramayana.jpg",emoji:"🏹",col:"linear-gradient(135deg,#331500,#6b2e00,#1a0900)",price:{r:240,v:580}},
+  {id:5,title:"Kalki 2898 AD",genre:"Sci-Fi · Action",rating:"UA",dur:"3h 1m",lang:"Telugu/Hindi/Kannada",poster:"posters/kalki.jpg",emoji:"🚀",col:"linear-gradient(135deg,#1a0a2e,#4a0080,#1a0040)",price:{r:220,v:550}},
+  {id:6,title:"Kantara: Chapter 1",genre:"Mythology · Action",rating:"UA",dur:"2h 45m",lang:"Kannada/Hindi/Telugu",poster:"posters/kantara.jpg",emoji:"🔱",col:"linear-gradient(135deg,#200a00,#501a00,#100500)",price:{r:230,v:560}},
+  {id:7,title:"Pushpa 2: The Rule",genre:"Action · Drama",rating:"A",dur:"3h 20m",lang:"Telugu/Hindi/Kannada",poster:"posters/pushpa2.jpg",emoji:"🌿",col:"linear-gradient(135deg,#1a0d00,#4a2000,#2a0a00)",price:{r:200,v:500}},
+  {id:8,title:"Salaar: Part 1 – Ceasefire",genre:"Action · Thriller",rating:"A",dur:"2h 55m",lang:"Telugu/Kannada/Hindi",poster:"posters/salaar.jpg",emoji:"🗡️",col:"linear-gradient(135deg,#141414,#2e2e2e,#0a0a0a)",price:{r:220,v:540}},
+  {id:9,title:"Jawan",genre:"Action · Thriller",rating:"UA",dur:"2h 49m",lang:"Hindi/Tamil/Telugu",poster:"posters/jawan.jpg",emoji:"💥",col:"linear-gradient(135deg,#1c0808,#450f0f,#100303)",price:{r:210,v:520}},
+  {id:10,title:"Devara: Part 1",genre:"Action · Marine Thriller",rating:"UA",dur:"2h 56m",lang:"Telugu/Hindi/Kannada",poster:"posters/devara.jpg",emoji:"🌊",col:"linear-gradient(135deg,#001a1a,#004040,#001010)",price:{r:190,v:480}},
+  {id:11,title:"Stree 2",genre:"Horror · Comedy",rating:"UA",dur:"2h 15m",lang:"Hindi",poster:"posters/stree2.jpg",emoji:"👻",col:"linear-gradient(135deg,#0d001a,#2d0040,#0d0020)",price:{r:180,v:450}},
+  {id:12,title:"Fighter",genre:"Action · Aerial War",rating:"UA",dur:"2h 46m",lang:"Hindi",poster:"posters/fighter.jpg",emoji:"✈️",col:"linear-gradient(135deg,#001a30,#004080,#001020)",price:{r:210,v:530}}
+];
+var selectedLanguage = null;
+var SHOWTIMES=[
+  {id:1,time:"10:00 AM",label:"Morning Show",screenIdx:0},
+  {id:2,time:"1:30 PM",label:"Matinee",screenIdx:1},
+  {id:3,time:"4:45 PM",label:"Evening Show",screenIdx:2},
+  {id:4,time:"8:00 PM",label:"Prime Night",screenIdx:0},
+  {id:5,time:"11:30 PM",label:"Late Night",screenIdx:1},
+];
+var VIP_ROW_LABELS=['H','I','J'];
+var bookings=JSON.parse(localStorage.getItem('ss3d_bookings')||'[]');
+var activeMovie=null, activeShowtime=null, cancelBid=null;
+
+// ── LOADER ──
+function dismissLoader(){
+  var l=document.getElementById('loader');
+  if(l){
+    l.style.opacity='0';
+    setTimeout(function(){l.style.display='none';},250);
+  }
+  showMovies();
+}
+setTimeout(dismissLoader, 100);
+window.addEventListener('DOMContentLoaded', dismissLoader);
+
+// ── THREE.JS SETUP ──
+var ROWS=10, COLS=14, HALF=7;
+var ROW_LABELS='ABCDEFGHIJ'.split('');
+var VIP_ROWS=[7,8,9];
+var SEAT_W=0.88, SEAT_D=0.78;
+var X_GAP=1.08, Z_GAP=1.6, AISLE=1.1, ROW_RISE=0.34;
+
+// SCREEN at Z=-18. Front Row A (row 0): Z=-10. Back Row J (row 9): Z=4.4 (stadium goes UP away from screen)
+var FRONT_Z=-10;
+var SCREEN_CENTER=new THREE.Vector3(0,5.8,-17.9);
+
+var CLOT=[0xe74c3c,0x3498db,0x2ecc71,0xf39c12,0x9b59b6,0x1abc9c,0xe67e22,0xec407a,0x26c6da,0xffca28,0xab47bc,0x66bb6a,0xef5350,0x42a5f5,0xff5722,0x607d8b,0x795548,0x4caf50,0xf06292,0x80cbc4];
+var SKIN=[0xffca94,0xd4a476,0xa0522d,0x8d4524,0xf5cba7,0xdeb887,0xc68642];
+
+var canvas=document.getElementById('c');
+var renderer, scene, camera, controls, screenMesh;
+var dynamicMeshes=[];
+var selectedSeats=new Set();
+var selectedSeatEntries=[];  // track entries for glow animation
+var activeMovieId=null, activeShowtimeId=null;
+var inSeatView=false;
+
+function seededRand(s){var x=Math.sin(s+1)*10000;return x-Math.floor(x);}
+function seatX(col){return col<HALF ? -(HALF-col-0.5)*X_GAP - AISLE/2 : (col-HALF+0.5)*X_GAP + AISLE/2;}
+function seatZ(row){return FRONT_Z + row*Z_GAP;}
+function seatY(row){return 0.4 + row*ROW_RISE;}
+function getLocalOcc(mid,sid){return new Set(JSON.parse(localStorage.getItem('occ_'+mid+'_'+sid)||'[]'));}
+
+var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+
+try {
+  renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:!isMobile,powerPreference:'high-performance'});
+  renderer.setSize(window.innerWidth,window.innerHeight);
+  // Cap device pixel ratio at 1.5 on mobile to avoid 3x retina fillrate lag
+  renderer.setPixelRatio(isMobile ? Math.min(window.devicePixelRatio||1, 1.25) : Math.min(window.devicePixelRatio||1, 2));
+  renderer.shadowMap.enabled = !isMobile;
+  if(!isMobile) renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x020208);
+  scene.fog=new THREE.FogExp2(0x03030e,0.015);
+
+  camera=new THREE.PerspectiveCamera(55,window.innerWidth/window.innerHeight,0.1,150);
+  camera.position.set(11,11,14);
+  camera.lookAt(0,3.5,-12);
+
+  if(THREE.OrbitControls){
+    controls=new THREE.OrbitControls(camera,renderer.domElement);
+    controls.enableDamping=true;
+    controls.dampingFactor=0.06;
+    controls.minDistance=3;
+    controls.maxDistance=50;
+    controls.maxPolarAngle=Math.PI*0.80;
+    controls.target.set(0,3.5,-12);
+  }
+
+  window.addEventListener('resize',function(){
+    camera.aspect=window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth,window.innerHeight);
+  });
+
+  // ── LIGHTING (improved) ──
+  scene.add(new THREE.AmbientLight(0x1a2a4a,0.8));
+
+  // Main screen light (ambient cinematic wash cast onto seats, positioned in front of screen)
+  var screenLight=new THREE.PointLight(0xaad4ff,1.2,30);
+  screenLight.position.set(0,6,-13);
+  scene.add(screenLight);
+
+  // Ceiling spotlights (warm, theatrical) - reduced count on mobile
+  var spotCount = isMobile ? 2 : 5;
+  for(var ci=0;ci<spotCount;ci++){
+    var cl=new THREE.SpotLight(0x334466,1.2,28,Math.PI*0.18,0.5);
+    cl.position.set(0,13,-12+ci*(isMobile?10:5));
+    cl.target.position.set(0,0,-12+ci*(isMobile?10:5));
+    scene.add(cl);scene.add(cl.target);
+  }
+
+  // Side warm accent lights (aisle lighting)
+  [-5.5,5.5].forEach(function(x){
+    var al=new THREE.PointLight(0x552200,1.4,18);
+    al.position.set(x,0.2,2);
+    scene.add(al);
+  });
+
+  // VIP back light (subtle blue)
+  var vipLight=new THREE.PointLight(0x0033aa,0.8,20);
+  vipLight.position.set(0,8,10);
+  scene.add(vipLight);
+
+  // ── REALISTIC CINEMA AUDITORIUM ENCLOSURE ──
+  // Front flat stage area (from screen Z=-19 to front row Z=-10.8)
+  var stageFloorMat=new THREE.MeshStandardMaterial({color:0x110508,roughness:0.95});
+  var stageFloor=new THREE.Mesh(new THREE.BoxGeometry(32, 0.4, 8.5), stageFloorMat);
+  stageFloor.position.set(0, -0.2, -15);
+  stageFloor.receiveShadow=true;
+  scene.add(stageFloor);
+
+  // Carpet down the front stage aisle
+  var frontAisle=new THREE.Mesh(new THREE.PlaneGeometry(1.2, 8.4), new THREE.MeshStandardMaterial({color:0x220508,roughness:1}));
+  frontAisle.rotation.x=-Math.PI/2;
+  frontAisle.position.set(0, 0.01, -15);
+  scene.add(frontAisle);
+
+  // Stadium Tier Solid Base Block (Eliminates the empty gap under the seats!)
+  // Each tier has a full solid base descending right to the floor
+  for(var r=0; r<ROWS; r++){
+    var yTop = seatY(r) - 0.4; // platform surface
+    var zz = seatZ(r);
+    var heightFromGround = yTop - (-0.4);
+    
+    // Solid tier block
+    var blockMat = new THREE.MeshStandardMaterial({color: (r%2===0)?0x180709:0x140608, roughness: 0.95});
+    var block = new THREE.Mesh(new THREE.BoxGeometry(32, heightFromGround, Z_GAP), blockMat);
+    block.position.set(0, yTop - heightFromGround/2, zz);
+    block.receiveShadow = true;
+    scene.add(block);
+
+    // Front edge step riser (amber safety light strip)
+    var stepLight = new THREE.Mesh(new THREE.BoxGeometry(32, 0.04, 0.04), new THREE.MeshStandardMaterial({color:0xffaa44, emissive:0xff8822, emissiveIntensity:1.8}));
+    stepLight.position.set(0, yTop + 0.02, zz - Z_GAP/2);
+    scene.add(stepLight);
+
+    // Subtle aisle carpet segment in center
+    var aislePatch = new THREE.Mesh(new THREE.PlaneGeometry(1.2, Z_GAP*0.95), new THREE.MeshStandardMaterial({color:0x220508, roughness:1}));
+    aislePatch.rotation.x = -Math.PI/2;
+    aislePatch.position.set(0, yTop + 0.01, zz);
+    scene.add(aislePatch);
+
+    // Small LED aisle step markers on center walkway
+    var ledDot = new THREE.Mesh(new THREE.CircleGeometry(0.04, 8), new THREE.MeshStandardMaterial({color:0xffdd88, emissive:0xffaa33, emissiveIntensity:2}));
+    ledDot.rotation.x = -Math.PI/2;
+    ledDot.position.set(-0.55, yTop + 0.015, zz);
+    scene.add(ledDot);
+    var ledDot2 = ledDot.clone();
+    ledDot2.position.x = 0.55;
+    scene.add(ledDot2);
+  }
+
+  // Back VIP Promenade Platform behind row J
+  var backY = seatY(ROWS-1) - 0.4;
+  var backPlatform = new THREE.Mesh(new THREE.BoxGeometry(32, backY - (-0.4), 6), new THREE.MeshStandardMaterial({color:0x120507, roughness:0.95}));
+  backPlatform.position.set(0, (backY - 0.4)/2, seatZ(ROWS-1) + 3 + Z_GAP/2);
+  scene.add(backPlatform);
+
+  // Auditorum Walls (seamlessly meeting stadium height)
+  var wallMat=new THREE.MeshStandardMaterial({color:0x0a0305,roughness:0.95,metalness:0.02});
+  var bw=new THREE.Mesh(new THREE.PlaneGeometry(32,18),wallMat);
+  bw.position.set(0, backY + 7, seatZ(ROWS-1) + 6 + Z_GAP/2);
+  bw.rotation.y=Math.PI;
+  scene.add(bw);
+
+  [-16,16].forEach(function(x,i){
+    var sw=new THREE.Mesh(new THREE.PlaneGeometry(48,20),wallMat);
+    sw.position.set(x,8,0);
+    sw.rotation.y=i===0?Math.PI/2:-Math.PI/2;
+    scene.add(sw);
+  });
+
+  // Ceiling
+  var ceil=new THREE.Mesh(new THREE.PlaneGeometry(32,48),new THREE.MeshStandardMaterial({color:0x050203,roughness:1}));
+  ceil.rotation.x=Math.PI/2;ceil.position.y=15;scene.add(ceil);
+
+  // ── ACOUSTIC WALL PANELS WITH WARM BACKLIGHT ──
+  var panelMat=new THREE.MeshStandardMaterial({color:0x160709,roughness:0.85,metalness:0.05});
+  var trimMat=new THREE.MeshStandardMaterial({color:0xffaa33,roughness:0.6,emissive:0xff8811,emissiveIntensity:0.8});
+  for(var pi=0;pi<6;pi++){
+    var pz=-14+pi*4.8;
+    // Left acoustic panels
+    var lp=new THREE.Mesh(new THREE.BoxGeometry(0.12,6,3.6),panelMat);
+    lp.position.set(-15.9,5,pz);scene.add(lp);
+    var lt=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,3.8),trimMat);
+    lt.position.set(-15.86,8.0,pz);scene.add(lt);
+    // Right acoustic panels
+    var rp=lp.clone();rp.position.set(15.9,5,pz);scene.add(rp);
+    var rt=lt.clone();rt.position.set(15.86,8.0,pz);scene.add(rt);
+  }
+
+  // ── EXIT SIGNS (properly positioned above doors) ──
+  var exitMat=new THREE.MeshStandardMaterial({color:0x003300,emissive:0x00cc44,emissiveIntensity:2});
+  [[-15.8, backY + 2.5, seatZ(ROWS-1)+2],[15.8, backY + 2.5, seatZ(ROWS-1)+2]].forEach(function(pos, idx){
+    var ex=new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 1.3), exitMat);
+    ex.position.set(pos[0], pos[1], pos[2]);
+    scene.add(ex);
+  });
+
+  // ── SCREEN & FRAME ──
+  // Screen curtains (deep red velvet)
+  var curtainMat=new THREE.MeshStandardMaterial({color:0x2a0808,roughness:0.95,metalness:0.0});
+  var lCurtain=new THREE.Mesh(new THREE.BoxGeometry(3.5,10,0.4),curtainMat);
+  lCurtain.position.set(-13.5,5,-18.2);scene.add(lCurtain);
+  var rCurtain=new THREE.Mesh(new THREE.BoxGeometry(3.5,10,0.4),curtainMat);
+  rCurtain.position.set(13.5,5,-18.2);scene.add(rCurtain);
+  // Curtain trim (gold)
+  var ctrimMat=new THREE.MeshStandardMaterial({color:0xf5c518,emissive:0xaa8800,emissiveIntensity:0.5,metalness:0.5});
+  var ltrim=new THREE.Mesh(new THREE.BoxGeometry(0.12,10,0.5),ctrimMat);
+  ltrim.position.set(-11.6,5,-18.0);scene.add(ltrim);
+  var rtrim=ltrim.clone();rtrim.position.x=11.6;scene.add(rtrim);
+
+  // Screen frame
+  var frame=new THREE.Mesh(new THREE.BoxGeometry(23.5,9.0,0.4),new THREE.MeshStandardMaterial({color:0x0a0505,roughness:0.9,metalness:0.1}));
+  frame.position.set(0,5.8,-18.22);scene.add(frame);
+  // Screen surface
+  screenMesh=new THREE.Mesh(new THREE.PlaneGeometry(21.5,7.4),new THREE.MeshStandardMaterial({
+    color:0xffffff,
+    emissive:0x1a1a1a,
+    emissiveIntensity:0.35,
+    roughness:0.8,
+    metalness:0.0
+  }));
+  screenMesh.position.set(0,5.8,-17.9);scene.add(screenMesh);
+  // Screen label "SCREEN"
+  var screenLabelMat=new THREE.MeshStandardMaterial({color:0xf5c518,emissive:0xf5c518,emissiveIntensity:0.8});
+  var slGeo=new THREE.BoxGeometry(3,0.3,0.05);
+  var sl=new THREE.Mesh(slGeo,screenLabelMat);
+  sl.position.set(0,1.6,-17.9);scene.add(sl);
+  // Bottom curtain bar
+  var bbar=new THREE.Mesh(new THREE.BoxGeometry(23.5,2.2,0.3),new THREE.MeshStandardMaterial({color:0x1a0808,roughness:0.95}));
+  bbar.position.set(0,0.8,-18.2);scene.add(bbar);
+
+  // ── SCREEN GLOW LIGHT (subtle environmental light cast onto audience) ──
+  var screenGlow=new THREE.PointLight(0x4477cc,1.0,24);
+  screenGlow.position.set(0,5.8,-14.0);
+  scene.add(screenGlow);
+
+  // ── ROW LABELS (floating A-J on left side) ──
+  function makeRowLabel(letter, r){
+    var canvas2=document.createElement('canvas');
+    canvas2.width=64;canvas2.height=64;
+    var ctx=canvas2.getContext('2d');
+    ctx.fillStyle='rgba(0,0,0,0)';
+    ctx.fillRect(0,0,64,64);
+    ctx.font='bold 40px Arial';
+    ctx.fillStyle=VIP_ROWS.indexOf(r)>=0?'#f5c518':'#00e5ff';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(letter,32,32);
+    var tex=new THREE.CanvasTexture(canvas2);
+    var spr=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false}));
+    spr.scale.set(0.9,0.9,1);
+    spr.position.set(-16.5+0.5,seatY(r)+0.5,seatZ(r));
+    scene.add(spr);
+    dynamicMeshes.push(spr);
+  }
+
+} catch(e) {
+  console.warn("3D initialization note:", e);
+}
+
+// ── SHARED GEOMETRIES & MATERIALS FOR 60FPS PERFORMANCE ──
+var _cushionGeo = new THREE.BoxGeometry(SEAT_W,0.14,SEAT_D);
+var _backGeo = new THREE.BoxGeometry(SEAT_W,0.80,0.12);
+var _armGeo = new THREE.BoxGeometry(0.07,0.26,SEAT_D*0.9);
+var _darkMat = new THREE.MeshStandardMaterial({color:0x0d0d0d,roughness:0.9});
+var _bodyGeo = new THREE.CylinderGeometry(0.17,0.20,0.52,6);
+var _headGeo = new THREE.SphereGeometry(0.17,6,6);
+
+// ── SEAT MODEL ──
+function makeSeatMesh(color){
+  var g=new THREE.Group();
+  var mat=new THREE.MeshStandardMaterial({color:color,roughness:0.68,metalness:0.1});
+  // Cushion
+  var cushion=new THREE.Mesh(_cushionGeo,mat);
+  cushion.position.set(0,0.07,0);if(!isMobile) cushion.castShadow=true;g.add(cushion);
+  // Backrest (+Z side, faces -Z toward screen)
+  var back=new THREE.Mesh(_backGeo,mat);
+  back.position.set(0,0.47,SEAT_D/2-0.05);if(!isMobile) back.castShadow=true;g.add(back);
+  // Armrests
+  var la=new THREE.Mesh(_armGeo,_darkMat);la.position.set(-SEAT_W/2-0.035,0.21,0);
+  var ra=new THREE.Mesh(_armGeo,_darkMat);ra.position.set(SEAT_W/2+0.035,0.21,0);g.add(la,ra);
+  g.userData.mat=mat;
+  return g;
+}
+
+// ── HUMAN MODEL ──
+function makeHuman(){
+  var g=new THREE.Group();
+  var sc=SKIN[Math.floor(Math.random()*SKIN.length)];
+  var cc=CLOT[Math.floor(Math.random()*CLOT.length)];
+  var bm=new THREE.MeshStandardMaterial({color:cc,roughness:0.85});
+  var hm=new THREE.MeshStandardMaterial({color:sc,roughness:0.9});
+  var body=new THREE.Mesh(_bodyGeo,bm);
+  body.position.set(0,0.46,0.04);if(!isMobile) body.castShadow=true;g.add(body);
+  var head=new THREE.Mesh(_headGeo,hm);
+  head.position.set(0,0.89,0.04);if(!isMobile) head.castShadow=true;g.add(head);
+  return g;
+}
+
+// ── CLEAR & BUILD ──
+function clearDynamic(){
+  if(!scene)return;
+  dynamicMeshes.forEach(function(m){scene.remove(m);});
+  dynamicMeshes=[];selectedSeats=new Set();selectedSeatEntries=[];
+}
+
+function buildIdleCinema(){
+  if(screenMesh) updateScreenForMovie(MOVIES[0]);
+  if(!scene)return;
+  clearDynamic();
+  for(var r=0;r<ROWS;r++){
+    makeRowLabel(ROW_LABELS[r],r);
+    for(var c=0;c<COLS;c++){
+      var occupied=seededRand(r*20+c+77)<0.55;
+      var isVip=VIP_ROWS.indexOf(r)>=0;
+      var color=occupied?(isVip?0x1e3a8a:0x1a7a3e):0x5a1515;
+      var sm=makeSeatMesh(color);
+      sm.position.set(seatX(c),seatY(r),seatZ(r));
+      scene.add(sm);dynamicMeshes.push(sm);
+      if(!occupied){
+        var h=makeHuman();
+        h.position.set(seatX(c),seatY(r),seatZ(r));
+        h.rotation.y=(Math.random()-0.5)*0.25;
+        scene.add(h);dynamicMeshes.push(h);
+      }
+    }
+  }
+}
+
+
+// ── THEATRICAL SCREEN RENDERER (FULL POSTER & PROPER FACES VISIBLE) ──
+var screenCanvas = document.createElement('canvas');
+screenCanvas.width = isMobile ? 1200 : 2400;
+screenCanvas.height = isMobile ? 450 : 900;
+var screenCtx = screenCanvas.getContext('2d');
+
+var cinemaTexture = (typeof THREE !== 'undefined') ? new THREE.CanvasTexture(screenCanvas) : null;
+if (cinemaTexture) {
+  cinemaTexture.minFilter = THREE.LinearFilter;
+  cinemaTexture.magFilter = THREE.LinearFilter;
+  cinemaTexture.generateMipmaps = false;
+}
+
+function updateScreenForMovie(movie){
+  if(!screenMesh) return;
+  if(!movie || !movie.poster) return;
+
+  var img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = function(){
+    var W = screenCanvas.width;
+    var H = screenCanvas.height;
+
+    // 1. Dark cinema stage backdrop
+    screenCtx.clearRect(0, 0, W, H);
+    screenCtx.fillStyle = '#060408';
+    screenCtx.fillRect(0, 0, W, H);
+
+    // 2. Full theatrical poster display (FITS 100% OF HEIGHT - FACES & TITLES FULLY VISIBLE!)
+    var posterH = H * 0.96; // 96% of screen height
+    var posterW = posterH * (img.width / img.height);
+    var posterX = (W - posterW) / 2;
+    var posterY = (H - posterH) / 2;
+
+    // 3. Luxurious deep velvet cinema stage curtains on Left & Right wings
+    var lWingW = posterX;
+    var rWingX = posterX + posterW;
+
+    // Left curtain wing
+    var lGrad = screenCtx.createLinearGradient(0, 0, lWingW, 0);
+    lGrad.addColorStop(0, '#100305');
+    lGrad.addColorStop(0.7, '#24070a');
+    lGrad.addColorStop(1, '#080203');
+    screenCtx.fillStyle = lGrad;
+    screenCtx.fillRect(0, 0, lWingW, H);
+
+    // Right curtain wing
+    var rGrad = screenCtx.createLinearGradient(rWingX, 0, W, 0);
+    rGrad.addColorStop(0, '#080203');
+    rGrad.addColorStop(0.3, '#24070a');
+    rGrad.addColorStop(1, '#100305');
+    screenCtx.fillStyle = rGrad;
+    screenCtx.fillRect(rWingX, 0, W - rWingX, H);
+
+    // Subtle velvet curtain vertical folds
+    screenCtx.fillStyle = 'rgba(0,0,0,0.3)';
+    for(var fx=20; fx<lWingW-10; fx+=40){ screenCtx.fillRect(fx, 0, 15, H); }
+    for(var fx=rWingX+20; fx<W-10; fx+=40){ screenCtx.fillRect(fx, 0, 15, H); }
+
+    // Gold trim vertical pillar borders flanking the movie poster
+    var borderGlow = screenCtx.createLinearGradient(0, 0, 0, H);
+    borderGlow.addColorStop(0, '#885500');
+    borderGlow.addColorStop(0.5, '#f5c518');
+    borderGlow.addColorStop(1, '#885500');
+    screenCtx.fillStyle = borderGlow;
+    screenCtx.fillRect(posterX - 6, 0, 6, H);
+    screenCtx.fillRect(posterX + posterW, 0, 6, H);
+
+    // 4. Draw the razor-sharp official movie poster in full height!
+    screenCtx.save();
+    screenCtx.shadowColor = 'rgba(0,0,0,0.95)';
+    screenCtx.shadowBlur = 40;
+    screenCtx.drawImage(img, posterX, posterY, posterW, posterH);
+    screenCtx.restore();
+
+    // 5. Update Three.js screen mesh texture with perfectly balanced cinema luminance
+    if (cinemaTexture) {
+      cinemaTexture.needsUpdate = true;
+      if (!screenMesh.material.isMeshStandardMaterial) {
+        screenMesh.material.dispose();
+        screenMesh.material = new THREE.MeshStandardMaterial({
+          map: cinemaTexture,
+          color: 0xffffff,
+          emissive: 0xffffff,
+          emissiveMap: cinemaTexture,
+          emissiveIntensity: 0.55,
+          roughness: 0.9,
+          metalness: 0.0
+        });
+      } else {
+        screenMesh.material.map = cinemaTexture;
+        screenMesh.material.color.set(0xffffff);
+        screenMesh.material.emissive.set(0xffffff);
+        screenMesh.material.emissiveMap = cinemaTexture;
+        screenMesh.material.emissiveIntensity = 0.55;
+        screenMesh.material.roughness = 0.9;
+      }
+      screenMesh.material.needsUpdate = true;
+    }
+  };
+  img.src = movie.poster;
+}
+
+function buildSeats(movieId,showtimeId){
+  updateScreenForMovie(activeMovie);
+  if(!scene)return;
+  clearDynamic();activeMovieId=movieId;activeShowtimeId=showtimeId;
+  var occ=getLocalOcc(movieId,showtimeId);
+  var seed=movieId*31+showtimeId*97;
+  for(var r=0;r<ROWS;r++){
+    for(var c=0;c<COLS;c++){
+      var id=ROW_LABELS[r]+(c+1);
+      if(!occ.has(id)&&seededRand(seed+r*20+c)<0.38) occ.add(id);
+    }
+  }
+  for(var r=0;r<ROWS;r++){
+    makeRowLabel(ROW_LABELS[r],r);
+    var isVip=VIP_ROWS.indexOf(r)>=0;
+    for(var c=0;c<COLS;c++){
+      var seatId=ROW_LABELS[r]+(c+1);
+      var isBooked=occ.has(seatId);
+      var baseColor=isBooked?0x5a1515:(isVip?0x1e3a8a:0x1a7a3e);
+      var sm=makeSeatMesh(baseColor);
+      var px=seatX(c), py=seatY(r), pz=seatZ(r);
+      sm.position.set(px,py,pz);
+      sm.receiveShadow=true;
+      scene.add(sm);dynamicMeshes.push(sm);
+      var hm=null;
+      if(isBooked){
+        hm=makeHuman();
+        hm.position.set(px,py,pz);
+        hm.rotation.y=(Math.random()-0.5)*0.2;
+        scene.add(hm);dynamicMeshes.push(hm);
+      }
+      var entry={seatId:seatId,row:r,col:c,isVip:isVip,isBooked:isBooked,
+                 seatMesh:sm,humanMesh:hm,baseColor:new THREE.Color(baseColor),
+                 worldX:px,worldY:py,worldZ:pz};
+      sm.userData=entry;
+      sm.traverse(function(ch){if(ch.isMesh)ch.userData.seatEntry=entry;});
+    }
+  }
+  updateBookingPanel();
+}
+
+// ── RAYCASTING ──
+var raycaster=new THREE.Raycaster();
+var mouse=new THREE.Vector2();
+var tooltip=document.getElementById('seat-tooltip');
+
+canvas.addEventListener('mousemove',function(e){
+  if(!camera||!scene)return;
+  mouse.x=(e.clientX/window.innerWidth)*2-1;
+  mouse.y=-(e.clientY/window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  var hits=raycaster.intersectObjects(scene.children,true);
+  var found=null;
+  for(var i=0;i<hits.length;i++){if(hits[i].object.userData.seatEntry){found=hits[i];break;}}
+  if(found){
+    var se=found.object.userData.seatEntry;
+    tooltip.style.display='block';
+    tooltip.style.left=e.clientX+16+'px';
+    tooltip.style.top=e.clientY-32+'px';
+    var status=se.isBooked?'🔴 Booked':selectedSeats.has(se.seatId)?'✅ Selected':'🟢 Available';
+    tooltip.innerHTML='<b>'+(se.isVip?'★ VIP ':'')+' Seat '+se.seatId+'</b><br><span style="color:rgba(255,255,255,.5);font-size:.7rem">'+status+(selectedSeats.has(se.seatId)?' · Click to Deselect / Cancel':' · Click to Select')+'</span>';
+    canvas.style.cursor=se.isBooked?'default':'pointer';
+  } else {
+    tooltip.style.display='none';canvas.style.cursor='default';
+  }
+});
+
+function handlePointerSelect(clientX, clientY){
+  if(!activeShowtimeId||!camera||!scene)return;
+  mouse.x=(clientX/window.innerWidth)*2-1;
+  mouse.y=-(clientY/window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  var hits=raycaster.intersectObjects(scene.children,true);
+  for(var i=0;i<hits.length;i++){
+    var se=hits[i].object.userData.seatEntry;
+    if(se&&!se.isBooked){toggleSeat(se);return;}
+  }
+}
+
+canvas.addEventListener('click',function(e){
+  handlePointerSelect(e.clientX, e.clientY);
+});
+
+// Mobile & Tablet Touch Support for Seat Selection
+var touchStartX = 0, touchStartY = 0;
+canvas.addEventListener('touchstart',function(e){
+  if(e.touches.length===1){
+    touchStartX=e.touches[0].clientX;
+    touchStartY=e.touches[0].clientY;
+  }
+},{passive:true});
+
+canvas.addEventListener('touchend',function(e){
+  if(e.changedTouches.length===1){
+    var dx = Math.abs(e.changedTouches[0].clientX - touchStartX);
+    var dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
+    // If movement is small (< 10px), treat as tap/click
+    if(dx < 10 && dy < 10){
+      handlePointerSelect(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    }
+  }
+});
+
+// ── SEAT VIEW CAMERA ──
+var seatViewActive=false;
+var currentViewingSeatEntry=null;
+
+function animateToSeatView(se){
+  currentViewingSeatEntry = se;
+  // Position camera just behind and above the seat, looking at screen
+  var eyeX=se.worldX;
+  var eyeY=se.worldY+0.95;  // Eye height above seat
+  var eyeZ=se.worldZ-0.2;   // Slightly in front of backrest
+  if(!camera||!controls)return;
+  camAnim={
+    fromPos:camera.position.clone(),
+    toPos:new THREE.Vector3(eyeX,eyeY,eyeZ),
+    fromLook:controls.target.clone(),
+    toLook:SCREEN_CENTER.clone(),
+    t:0, dur:1.2
+  };
+  controls.enabled=false;
+  seatViewActive=true;
+  document.getElementById('seat-view-banner').style.display='block';
+  document.getElementById('svb-title').textContent='👁 View from Seat '+se.seatId;
+  var cancelBtn = document.getElementById('svb-cancel-btn');
+  if(cancelBtn){
+    cancelBtn.textContent = '✕ Cancel Seat ' + se.seatId;
+  }
+  // Deactivate camera button highlights
+  document.querySelectorAll('.cvbtn').forEach(function(b){b.classList.remove('active');});
+}
+
+function exitSeatView(){
+  seatViewActive=false;
+  currentViewingSeatEntry=null;
+  document.getElementById('seat-view-banner').style.display='none';
+  setCam('overview');
+}
+
+function cancelCurrentSeatFromView(){
+  if(currentViewingSeatEntry){
+    var sId = currentViewingSeatEntry.seatId;
+    deselectSeat(currentViewingSeatEntry);
+    showToast('Seat ' + sId + ' cancelled');
+  }
+  exitSeatView();
+}
+
+// ── TOGGLE SEAT (CLICK SELECT / CLICK AGAIN TO DESELECT) ──
+function toggleSeat(se){
+  var seatId=se.seatId, sm=se.seatMesh;
+  if(selectedSeats.has(seatId)){
+    // CANCEL / DESELECT THIS SEAT
+    deselectSeat(se);
+    showToast('Seat ' + seatId + ' deselected');
+    if(selectedSeats.size === 0 && seatViewActive){
+      exitSeatView();
+    }
+    return;
+  }
+  // Select the seat
+  if(selectedSeats.size>=6){showToast('⚠️ Max 6 seats per booking');return;}
+  selectedSeats.add(seatId);
+  selectedSeatEntries.push(se);
+
+  // Set gold color with glow emissive
+  sm.traverse(function(ch){
+    if(ch.isMesh&&ch.material){
+      ch.material.color.set(0xf5c518);
+      if(ch.material.emissive){ch.material.emissive.set(0xf5c518);}
+      ch.material.emissiveIntensity=0.45;
+    }
+  });
+
+  // Spawn a small point light at the seat for environmental glow
+  var seatGlow=new THREE.PointLight(0xf5c518,1.6,2.5);
+  seatGlow.position.set(se.worldX,se.worldY+0.5,se.worldZ);
+  scene.add(seatGlow);
+  sm.userData.glowLight=seatGlow;
+  dynamicMeshes.push(seatGlow);
+
+  // Animate camera toward this seat view
+  animateToSeatView(se);
+  updateBookingPanel();
+  showToast('✓ Seat ' + seatId + ' selected');
+}
+
+function deselectSeat(se){
+  if(typeof se === 'string'){
+    var sId = se;
+    se = selectedSeatEntries.find(function(e){return e.seatId === sId;});
+    if(!se) { selectedSeats.delete(sId); updateBookingPanel(); return; }
+  }
+  var seatId=se.seatId, sm=se.seatMesh;
+  selectedSeats.delete(seatId);
+  selectedSeatEntries=selectedSeatEntries.filter(function(e){return e.seatId!==seatId;});
+  var c=se.baseColor.clone();
+  sm.traverse(function(ch){
+    if(ch.isMesh&&ch.material){
+      ch.material.color.copy(c);
+      if(ch.material.emissive)ch.material.emissive.set(0x000000);
+      ch.material.emissiveIntensity=0;
+    }
+  });
+  if(sm.userData.glowLight){
+    scene.remove(sm.userData.glowLight);
+    sm.userData.glowLight=null;
+  }
+  updateBookingPanel();
+}
+
+function cancelSelectedSeat(seatId){
+  deselectSeat(seatId);
+  showToast('Seat ' + seatId + ' removed');
+}
+
+// ── CAMERA PRESETS ──
+var CAM_PRESETS={
+  overview:{pos:[10,10,13],look:[0,3,-8]},
+  screen:{pos:[0,2.6,1.5],look:[0,5.8,-18]},
+  balcony:{pos:[0,7.8,12],look:[0,5,-18]},
+  top:{pos:[0,19,4],look:[0,1.5,-6]},
+  side:{pos:[16,6.5,-1],look:[0,3,-6]}
+};
+var camAnim=null;
+
+function easeInOut(t){return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
+
+function setCam(view,btnEl){
+  document.querySelectorAll('.cvbtn').forEach(function(b){b.classList.remove('active');});
+  if(btnEl){btnEl.classList.add('active');}
+  else{var f=document.querySelector('.cvbtn[data-view="'+view+'"]');if(f)f.classList.add('active');}
+  var p=CAM_PRESETS[view];
+  if(!p||!camera||!controls)return;
+  seatViewActive=false;
+  document.getElementById('seat-view-banner').style.display='none';
+  camAnim={
+    fromPos:camera.position.clone(),
+    toPos:new THREE.Vector3(p.pos[0],p.pos[1],p.pos[2]),
+    fromLook:controls.target.clone(),
+    toLook:new THREE.Vector3(p.look[0],p.look[1],p.look[2]),
+    t:0, dur:1.6
+  };
+  controls.enabled=false;
+}
+
+// ── RENDER LOOP ──
+var clock=new THREE.Clock();
+var glowT=0;
+
+function animate(){
+  requestAnimationFrame(animate);
+  if(!renderer||!scene||!camera)return;
+  // If the user is browsing the movies overlay or modal, pause heavy 3D rendering
+  var moviesOverlay = document.getElementById('movies-overlay');
+  if(moviesOverlay && moviesOverlay.style.display === 'block'){
+    return;
+  }
+  var dt=clock.getDelta();
+  glowT+=dt;
+
+  // Camera animation
+  if(camAnim){
+    camAnim.t+=dt/camAnim.dur;
+    if(camAnim.t>=1){
+      camera.position.copy(camAnim.toPos);
+      controls.target.copy(camAnim.toLook);
+      camAnim=null;
+      controls.enabled=true;
+    } else {
+      var t=easeInOut(Math.min(camAnim.t,1));
+      camera.position.lerpVectors(camAnim.fromPos,camAnim.toPos,t);
+      controls.target.lerpVectors(camAnim.fromLook,camAnim.toLook,t);
+    }
+    camera.lookAt(controls.target);
+  }
+
+  // Screen glow pulse for environmental light (does not wash out the screen poster)
+  if(typeof screenGlow !== 'undefined' && screenGlow){
+    screenGlow.intensity = 0.9 + Math.sin(glowT * 0.8) * 0.2;
+  }
+
+  // Selected seat glow pulse animation
+  if(selectedSeatEntries.length>0){
+    var glowIntensity=0.3+Math.sin(glowT*4.0)*0.3; // pulsing
+    selectedSeatEntries.forEach(function(se){
+      if(!se.seatMesh||selectedSeats.has(se.seatId)===false)return;
+      se.seatMesh.traverse(function(ch){
+        if(ch.isMesh&&ch.material&&ch.material.emissive){
+          ch.material.emissiveIntensity=Math.max(0,glowIntensity);
+        }
+      });
+      // Pulse the glow light too
+      if(se.seatMesh.userData.glowLight){
+        se.seatMesh.userData.glowLight.intensity=1.2+Math.sin(glowT*4.0)*0.8;
+      }
+    });
+  }
+
+  if(controls)controls.update();
+  renderer.render(scene,camera);
+}
+
+// ── UI ──
+function hideAll(){
+  ['movies-overlay','bookings-overlay','cinema-ui'].forEach(function(id){
+    document.getElementById(id).style.display='none';
+  });
+  document.getElementById('camviews').style.display='none';
+  // Always close 3D seat view banner when leaving or switching views
+  exitSeatView();
+}
+function showMovies(){
+  hideAll();
+  document.getElementById('movies-overlay').style.display='block';
+  document.getElementById('nb-movies').classList.add('active');
+  document.getElementById('nb-seats').classList.remove('active');
+  document.getElementById('nb-bookings').classList.remove('active');
+  renderLanguagePills();
+  renderMovies();
+}
+function showBookings(){
+  hideAll();
+  document.getElementById('bookings-overlay').style.display='block';
+  document.getElementById('nb-bookings').classList.add('active');
+  document.getElementById('nb-movies').classList.remove('active');
+  document.getElementById('nb-seats').classList.remove('active');
+  renderBookings();
+}
+function showCinema(){
+  hideAll();
+  document.getElementById('cinema-ui').style.display='block';
+  document.getElementById('camviews').style.display='flex';
+  document.getElementById('nb-movies').classList.remove('active');
+  document.getElementById('nb-seats').classList.add('active');
+  document.getElementById('nb-bookings').classList.remove('active');
+}
+
+function renderMovies(){
+  var moviesToShow = MOVIES.filter(function(m){
+    if(!selectedLanguage) return true;
+    var langs = m.lang.split('/').map(function(s){return s.trim();});
+    return langs.includes(selectedLanguage);
+  });
+  var g=document.getElementById('movie-grid');
+  g.innerHTML=moviesToShow.map(function(m){
+    var posterImg = m.poster ? '<img class="mposter-img" src="'+m.poster+'" alt="'+m.title+'" onerror="this.style.display=\'none\'"/>' : '';
+    return '<div class="mcard" onclick="selectMovie('+m.id+')">'+
+      '<div class="mposter" style="background:'+m.col+'">'+
+      posterImg +
+      '<span class="mrating">'+m.rating+'</span>'+
+      '</div>'+
+      '<div class="minfo">'+
+      '<div class="mtitle">'+m.title+'</div>'+
+      '<div class="mbadges">'+
+      '<span class="mb mb-gold">⭐ '+m.rating+'</span>'+
+      '<span class="mb mb-cyan">'+m.genre.split('·')[0].trim()+'</span>'+
+      '<span class="mb mb-pink">'+m.lang.split('/')[0]+'</span>'+
+      '</div>'+
+      '<div style="font-size:.7rem;color:#00e5ff;margin-bottom:6px;font-weight:600;">📍 '+(activeTheatre?activeTheatre.name:'')+'</div>'+
+      '<div class="mmeta"><span>🕒 '+m.dur+'</span><span>🗣 '+m.lang+'</span></div>'+
+      '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;">'+
+      '<div style="font-size:.88rem;color:#f5c518;font-weight:800;">From ₹'+m.price.r+'</div>'+
+      '<button class="mbook-btn" style="width:auto;padding:8px 16px;">Select Hall & Seats →</button>'+
+      '</div></div></div>';
+  }).join('');
+}
+
+function renderLanguagePills(){
+  var container=document.getElementById('lang-selector');
+  if(!container) return;
+  var langsSet=new Set();
+  MOVIES.forEach(function(m){
+    m.lang.split('/').forEach(function(l){langsSet.add(l.trim());});
+  });
+  var pills=[];
+  var allActive = (selectedLanguage===null);
+  pills.push('<div class="lang-pill'+(allActive?' active':'')+'" onclick="selectLanguage(null)">All Languages</div>');
+  langsSet.forEach(function(l){
+    var active = (selectedLanguage===l);
+    pills.push('<div class="lang-pill'+(active?' active':'')+'" onclick="selectLanguage(\''+l+'\')">'+l+'</div>');
+  });
+  container.innerHTML=pills.join('');
+}
+
+function selectLanguage(lang){
+  selectedLanguage = lang;
+  renderLanguagePills();
+  renderMovies();
+  showToast(lang ? 'Filtered by: ' + lang : 'Showing all languages');
+}
+
+function selectMovie(id){
+  activeMovie=MOVIES.find(function(m){return m.id===id;});
+  openSTModal();
+}
+
+function openSTModal(){
+  var today=new Date();
+  document.getElementById('stm-title').textContent=activeMovie.emoji+' '+activeMovie.title;
+  document.getElementById('stm-sub').textContent='Choose your showtime — '+activeMovie.genre;
+  document.getElementById('st-grid').innerHTML=SHOWTIMES.map(function(s,i){
+    var d=new Date(today);d.setDate(d.getDate()+(i%3));
+    var ds=d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+    var avail=80+Math.floor(Math.sin(activeMovie.id*7+s.id)*15);
+    var pct=Math.round(avail/140*100);
+    return '<div class="stcard" onclick="selectShowtime('+s.id+',\''+ds+'\')">'+
+      '<div style="font-size:.66rem;color:rgba(255,255,255,.32);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">'+s.label+'</div>'+
+      '<div class="st-time">'+s.time+'</div>'+
+      '<div class="st-label">📅 '+ds+'</div>'+
+      '<div class="st-hall">🏛 '+s.hall+'</div>'+
+      '<div style="margin-top:8px;background:rgba(255,255,255,.08);border-radius:4px;height:4px;overflow:hidden;">'+
+      '<div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#00e5ff,#0099ff);border-radius:4px;"></div></div>'+
+      '<div class="st-avail">~'+avail+' seats available</div></div>';
+  }).join('');
+  document.getElementById('st-modal').style.display='flex';
+}
+
+function closeSTModal(){document.getElementById('st-modal').style.display='none';}
+
+function selectShowtime(id,dateStr,hallName){
+  var st = SHOWTIMES.find(function(s){return s.id===id;});
+  var chosenHall = hallName || (activeTheatre.screens[st.screenIdx % activeTheatre.screens.length]);
+  activeShowtime = Object.assign({}, st, {
+    dateStr: dateStr,
+    hall: chosenHall,
+    theatre: activeTheatre.name
+  });
+  document.getElementById('st-modal').style.display='none';
+  document.getElementById('nb-seats').disabled=false;
+  document.getElementById('chip-title').textContent=activeMovie.title;
+  document.getElementById('chip-time').textContent=activeShowtime.time+' · '+activeShowtime.dateStr+' · '+activeTheatre.name+' ('+chosenHall+')';
+  document.getElementById('bp-movie').textContent=activeMovie.title;
+  document.getElementById('bp-time').textContent=activeShowtime.time+' · '+activeShowtime.dateStr;
+  document.getElementById('bp-hall').textContent=activeTheatre.name+' · '+chosenHall;
+  showCinema();
+  setTimeout(function(){
+    buildSeats(activeMovie.id,activeShowtime.id);
+    setCam('overview');
+  },150);
+}
+
+function updateBookingPanel(){
+  if(!activeMovie)return;
+  var seats=Array.from(selectedSeats);
+  var seatsEl = document.getElementById('bp-seats');
+  if(seats.length === 0){
+    seatsEl.innerHTML = '<span style="color:rgba(255,255,255,.35);">None selected</span>';
+  } else {
+    seatsEl.innerHTML = seats.map(function(s){
+      return '<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(245,197,24,.18);border:1px solid rgba(245,197,24,.4);color:#f5c518;padding:2px 7px;border-radius:6px;font-size:.72rem;font-weight:800;margin:1px 2px;">' +
+        s + ' <span onclick="cancelSelectedSeat(\''+s+'\')" style="cursor:pointer;opacity:.65;font-size:.7rem;padding:0 2px;" title="Cancel seat">✕</span></span>';
+    }).join('');
+  }
+  var hasVip=seats.some(function(s){return VIP_ROW_LABELS.indexOf(s[0])>=0;});
+  var hasReg=seats.some(function(s){return VIP_ROW_LABELS.indexOf(s[0])<0;});
+  document.getElementById('bp-type').textContent=hasVip&&hasReg?'Mixed':hasVip?'★ VIP Recliner':hasReg?'Regular':'—';
+  var total=seats.reduce(function(sum,s){return sum+(VIP_ROW_LABELS.indexOf(s[0])>=0?activeMovie.price.v:activeMovie.price.r);},0);
+  document.getElementById('bp-total').textContent='₹'+total.toLocaleString('en-IN');
+  document.getElementById('proc-btn').disabled=seats.length===0;
+}
+
+// ── PAYMENT GATEWAY SELECTION LOGIC ──
+var activePaymentMethod = 'upi';
+var activeWalletName = 'Paytm Wallet';
+
+function selectPaymentMethod(type){
+  activePaymentMethod = type;
+  document.querySelectorAll('.pm-tab').forEach(function(t){t.classList.remove('active');});
+  var tab = document.getElementById('pmt-' + type);
+  if(tab) tab.classList.add('active');
+
+  ['upi', 'card', 'wallet'].forEach(function(p){
+    var el = document.getElementById('panel-' + p);
+    if(el) el.style.display = (p === type ? 'block' : 'none');
+  });
+
+  var btn = document.getElementById('btn-pay-confirm');
+  if(btn){
+    if(type === 'upi') btn.innerHTML = '⚡ Pay via UPI';
+    else if(type === 'card') btn.innerHTML = '💳 Pay via Card';
+    else if(type === 'wallet') btn.innerHTML = '👛 Pay via Wallet';
+  }
+}
+
+function setUpiApp(el, suffix){
+  document.querySelectorAll('.upi-chip').forEach(function(c){c.classList.remove('active');});
+  el.classList.add('active');
+  var inp = document.getElementById('inp-upi-id');
+  if(inp){
+    var base = inp.value.split('@')[0] || 'user';
+    inp.value = base + suffix;
+  }
+}
+
+function setWallet(el, wName){
+  document.querySelectorAll('.wallet-opt').forEach(function(w){w.classList.remove('active');});
+  el.classList.add('active');
+  activeWalletName = wName;
+}
+
+function openCustModal(){
+  var total = Array.from(selectedSeats).reduce(function(sum,s){
+    return sum + (VIP_ROW_LABELS.indexOf(s[0])>=0 ? activeMovie.price.v : activeMovie.price.r);
+  }, 0);
+  var btn = document.getElementById('btn-pay-confirm');
+  if(btn) btn.innerHTML = '🔒 Pay ₹' + total.toLocaleString('en-IN') + ' & Confirm';
+  document.getElementById('cust-modal').style.display='flex';
+}
+function closeCustModal(){document.getElementById('cust-modal').style.display='none';}
+
+function confirmBooking(){
+  var name=document.getElementById('inp-name').value.trim();
+  var phone=document.getElementById('inp-phone').value.trim();
+  var email=document.getElementById('inp-email').value.trim();
+  if(!name){alert('Please enter your name.');return;}
+  if(!phone||!/^\d{10}$/.test(phone)){alert('Please enter a valid 10-digit mobile number.');return;}
+  var seats=Array.from(selectedSeats);
+  if(!seats.length){alert('No seats selected.');return;}
+
+  // Validate payment info
+  var paymentMethodText = 'UPI';
+  if(activePaymentMethod === 'upi'){
+    var upiId = document.getElementById('inp-upi-id').value.trim();
+    if(!upiId || upiId.indexOf('@') < 0){alert('Please enter a valid UPI ID (e.g. yourname@upi)');return;}
+    paymentMethodText = 'UPI (' + upiId + ')';
+  } else if(activePaymentMethod === 'card'){
+    var cardNum = document.getElementById('inp-card-num').value.trim();
+    if(cardNum.length < 12){alert('Please enter a valid 16-digit card number.');return;}
+    paymentMethodText = 'Card (•••• ' + cardNum.slice(-4) + ')';
+  } else if(activePaymentMethod === 'wallet'){
+    paymentMethodText = activeWalletName;
+  }
+
+  var bid='SS-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).substr(2,4).toUpperCase();
+  var total=seats.reduce(function(sum,s){return sum+(VIP_ROW_LABELS.indexOf(s[0])>=0?activeMovie.price.v:activeMovie.price.r);},0);
+  var occ=getLocalOcc(activeMovie.id,activeShowtime.id);
+  seats.forEach(function(s){occ.add(s);});
+  localStorage.setItem('occ_'+activeMovie.id+'_'+activeShowtime.id,JSON.stringify(Array.from(occ)));
+  var booking={
+    id:bid,
+    movieId:activeMovie.id,
+    movieTitle:activeMovie.title,
+    movieGenre:activeMovie.genre,
+    movieEmoji:activeMovie.emoji,
+    showtime:activeShowtime.time,
+    showDate:activeShowtime.dateStr,
+    hall:activeShowtime.hall,
+    seats:seats,
+    total:total,
+    customer:{name:name,phone:phone,email:email},
+    paymentMethod:paymentMethodText,
+    status:'confirmed',
+    bookedAt:new Date().toISOString()
+  };
+  bookings.unshift(booking);
+  localStorage.setItem('ss3d_bookings',JSON.stringify(bookings));
+  // Immediately dismiss the 3D seat view banner if active
+  exitSeatView();
+  closeCustModal();
+  showTicket(booking);
+  spawnParticles();
+  showToast('🎉 Booking Confirmed via ' + paymentMethodText.split('(')[0] + '!');
+  selectedSeats.clear();
+  selectedSeatEntries=[];
+  updateBookingPanel();
+}
+
+// ── HIGH RESOLUTION BEAUTIFUL QR CODE GENERATOR ──
+function drawTicketQRCode(canvasId, text){
+  var cv = document.getElementById(canvasId);
+  if(!cv) return;
+  var size = 280;
+  cv.width = size;
+  cv.height = size;
+  var ctx = cv.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, size, size);
+
+  var grid = 25; // 25x25 matrix
+  var cell = size / grid;
+
+  // Pseudo-random hash pattern based on booking text
+  function getHash(str, seed){
+    var h = seed || 2166136261;
+    for(var i = 0; i < str.length; i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  // Draw 3 standard corner finder patterns
+  function drawFinderPattern(startX, startY){
+    ctx.fillStyle = '#060a14';
+    ctx.fillRect(startX * cell, startY * cell, 7 * cell, 7 * cell);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect((startX + 1) * cell, (startY + 1) * cell, 5 * cell, 5 * cell);
+    ctx.fillStyle = '#060a14';
+    ctx.fillRect((startX + 2) * cell, (startY + 2) * cell, 3 * cell, 3 * cell);
+  }
+
+  // Draw standard finder patterns
+  drawFinderPattern(0, 0);                 // Top-Left
+  drawFinderPattern(grid - 7, 0);          // Top-Right
+  drawFinderPattern(0, grid - 7);          // Bottom-Left
+
+  // Timing lines
+  for(var i = 8; i < grid - 8; i++){
+    if(i % 2 === 0){
+      ctx.fillStyle = '#060a14';
+      ctx.fillRect(i * cell, 6 * cell, cell, cell);
+      ctx.fillRect(6 * cell, i * cell, cell, cell);
+    }
+  }
+
+  // Data modules
+  var seed = getHash(text);
+  for(var r = 0; r < grid; r++){
+    for(var c = 0; c < grid; c++){
+      // Skip finder pattern zones
+      if(r < 8 && c < 8) continue;
+      if(r < 8 && c >= grid - 8) continue;
+      if(r >= grid - 8 && c < 8) continue;
+      // Skip timing lines
+      if(r === 6 || c === 6) continue;
+
+      var val = getHash(text + '_' + r + '_' + c, seed);
+      if((val % 100) < 46){
+        ctx.fillStyle = '#060a14';
+        // Rounded aesthetic modules
+        ctx.beginPath();
+        ctx.arc((c + 0.5) * cell, (r + 0.5) * cell, cell * 0.46, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Center brand emblem (gold cinema ticket icon)
+  var mid = size / 2;
+  var embSize = cell * 5;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(mid - embSize/2 - 2, mid - embSize/2 - 2, embSize + 4, embSize + 4);
+  ctx.fillStyle = '#0c101d';
+  ctx.beginPath();
+  ctx.arc(mid, mid, embSize/2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.font = 'bold 22px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🎬', mid, mid);
+}
+
+function showTicket(b){
+  document.getElementById('tk-emoji').textContent=b.movieEmoji;
+  document.getElementById('tk-movie').textContent=b.movieTitle;
+  document.getElementById('tk-genre').textContent=b.movieGenre;
+  document.getElementById('tk-time').textContent=b.showtime+' · '+b.showDate;
+  document.getElementById('tk-hall').textContent=(b.theatre ? b.theatre + ' · ' : '') + b.hall;
+  document.getElementById('tk-seats').textContent=b.seats.join(', ');
+  document.getElementById('tk-total').textContent='₹'+b.total.toLocaleString('en-IN');
+  document.getElementById('tk-cust').textContent=b.customer.name;
+  var payEl = document.getElementById('tk-payment');
+  if(payEl) payEl.textContent = '✓ ' + (b.paymentMethod || 'Paid');
+  document.getElementById('tk-bid').textContent=b.id;
+  // Generate high-resolution Gate QR Code for this booking
+  drawTicketQRCode('tk-qrcode', b.id + '|' + b.movieTitle + '|' + b.seats.join('-') + '|' + b.customer.phone);
+  document.getElementById('ticket-modal').style.display='flex';
+}
+function closeTicket(){document.getElementById('ticket-modal').style.display='none';}
+
+function renderBookings(){
+  var list=document.getElementById('bookings-list');
+  if(!bookings.length){
+    list.innerHTML='<div style="text-align:center;padding:70px;color:rgba(255,255,255,.25);"><div style="font-size:4.5rem;margin-bottom:18px;">🎭</div><div style="font-size:1.1rem;font-weight:700;">No bookings yet</div><div style="font-size:.82rem;margin-top:8px;">Book your first movie experience!</div></div>';
+    return;
+  }
+  list.innerHTML=bookings.map(function(b){
+    return '<div class="bk-item">'+
+      '<div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0;">'+
+      '<div style="font-size:2.4rem;flex-shrink:0">'+b.movieEmoji+'</div>'+
+      '<div style="min-width:0;">'+
+      '<div style="font-weight:800;font-size:.95rem;">'+b.movieTitle+'</div>'+
+      '<div style="font-size:.78rem;color:rgba(255,255,255,.4);margin-top:3px;">📅 '+b.showDate+' · 🕒 '+b.showtime+'</div>'+
+      '<div style="font-size:.78rem;color:rgba(255,255,255,.4);">🏛 '+b.hall+'</div>'+
+      '<div style="font-size:.8rem;color:#f5c518;margin-top:5px;font-weight:700;">💺 '+b.seats.join(', ')+'</div>'+
+      '<div style="font-size:.66rem;color:rgba(255,255,255,.22);font-family:Courier New,monospace;margin-top:4px;">'+b.id+'</div>'+
+      '</div></div>'+
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:9px;flex-shrink:0;">'+
+      '<span class="bk-status '+(b.status==='confirmed'?'s-conf':'s-canc')+'">'+(b.status==='confirmed'?'✓ Confirmed':'✕ Cancelled')+'</span>'+
+      '<div style="font-size:1.05rem;font-weight:800;color:#00e5ff;">₹'+b.total.toLocaleString('en-IN')+'</div>'+
+      (b.status==='confirmed'?'<button class="cancel-btn" onclick="openCancelModal(\''+b.id+'\')">Cancel</button>':'')+
+      '</div></div>';
+  }).join('');
+}
+
+function openCancelModal(id){cancelBid=id;document.getElementById('cancel-bid-txt').textContent=id;document.getElementById('cancel-modal').style.display='flex';}
+function closeCancelModal(){document.getElementById('cancel-modal').style.display='none';cancelBid=null;}
+function executeCancel(){
+  var b=bookings.find(function(x){return x.id===cancelBid;});
+  if(b){
+    b.status='cancelled';
+    var st=SHOWTIMES.find(function(s){return s.time===b.showtime;});
+    if(st){var occ=getLocalOcc(b.movieId,st.id);b.seats.forEach(function(s){occ.delete(s);});localStorage.setItem('occ_'+b.movieId+'_'+st.id,JSON.stringify(Array.from(occ)));}
+    localStorage.setItem('ss3d_bookings',JSON.stringify(bookings));
+  }
+  closeCancelModal();renderBookings();showToast('Booking cancelled · Seats released');
+}
+
+var toastT;
+function showToast(msg){
+  var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove('show');},3400);
+}
+
+function spawnParticles(){
+  var cols=['#f5c518','#00e5ff','#ff6b35','#ff4488','#44ff88','#aa44ff'];
+  for(var i=0;i<60;i++){
+    var p=document.createElement('div');p.className='particle';
+    var a=Math.random()*Math.PI*2, d=90+Math.random()*240;
+    p.style.cssText='left:50%;top:50%;background:'+cols[Math.floor(Math.random()*cols.length)]+
+      ';--x:'+(Math.cos(a)*d).toFixed(0)+'px;--y:'+(Math.sin(a)*d).toFixed(0)+'px;--t:'+(.6+Math.random()*.9).toFixed(2)+
+      's;width:'+(4+Math.random()*10)+'px;height:'+(4+Math.random()*10)+'px;';
+    document.body.appendChild(p);
+    setTimeout(function(el){el.remove();},1800,p);
+  }
+}
+
+// START
+buildIdleCinema();
+animate();
+</script>
+</body>
+</html>
